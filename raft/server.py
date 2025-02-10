@@ -60,7 +60,8 @@ class Node:
         self.transport.close()
 
     def request_handler(self, data):
-        self.state.receive(data)
+        loop = asyncio.get_event_loop()
+        loop.create_task(self.state.receive(data))
 
 
     async def send(self, data):
