@@ -1,53 +1,379 @@
 import asyncio
 from .logger import logger
+import random
+from .timer import Timer
+
 class State:
     """基本的にはここに必要なメソッドや変数を追加していく"""
     
     def __init__(self, node):
         self.node = node
         self.loop = self.node.loop or asyncio.get_event_loop()
-        self.logs = ["x += 1"]
-        self.statemachine = {"x": 1, "y": "2"}
-        self.counter = 1
+        
+        # Raftの状態
+        self.current_term = 0  # 現在のターム
+        self.voted_for = None  # このタームで投票したノード
+        self.state = 'follower'  # ノードの状態（follower, candidate, leader）
+        
+        # ログとステートマシン
+        self.logs = []  # ログエントリのリスト
+        self.statemachine = {}  # キーバリューストア
+        self.commit_index = -1  # コミット済みの最新のログインデックス
+        self.last_applied = -1  # ステートマシンに適用された最新のログインデックス
+        
+        # リーダー専用の状態
+        self.next_index = {}  # 各フォロワーに送信する次のログインデックス
+        self.match_index = {}  # 各フォロワーで複製されたログの最新インデックス
+        
+        # タイマー
+        self.election_timer = None
+        self.heartbeat_timer = None
+        
+        # クライアントのWrite要求を追跡するための辞書
+        self.pending_requests = {}
+        
+        # クライアントのリストを追加
+        self.clients = {}  # {client_name: client_connection}
 
+    def init_timers(self):
+        # 選挙タイムアウトタイマーの設定（150-300msのランダムな時間）
+        election_timeout = random.randint(150, 300) / 1000
+        self.election_timer = Timer(
+            interval=election_timeout,
+            callback=self.start_election
+        )
+        
+        # ハートビートタイマーの設定（固定値50ms）
+        self.heartbeat_timer = Timer(
+            interval=0.05,
+            callback=self.send_heartbeat
+        )
+
+    async def start_election(self):
+        """選挙を開始する"""
+        self.state = 'candidate'
+        self.current_term += 1
+        self.voted_for = self.node.name
+        self.received_votes = 1  # 自分への投票を含める
+        
+        # 投票要求を送信
+        request = {
+            'type': 'RequestVote',
+            'term': self.current_term,
+            'candidate_id': self.node.name,
+            'last_log_index': len(self.logs) - 1,
+            'last_log_term': self.logs[-1]['term'] if self.logs else 0
+        }
+        
+        # クラスタ内の他のノードに投票要求を送信
+        for node in self.node.cluster:
+            if not node.is_client:
+                await node.send(request)
 
     # サンプルプログラム：ノードから受信したら、カウンターを増やす
     # data: {"sender": "node_name", "data": "data"}
     # sedner: 送信元のノード名
     # data: 送信元から受信したデータ
     async def receive(self, data):
-        received_from = data["sender"] # 送信元のノード名を取得
-        received_message = data["data"] # 送信元から受信したデータを取得
-        logger.info("{}からメッセージをもらった！!: {}".format(received_from, received_message))
-        self.logs.append(received_message) # 1番
-        await asyncio.sleep(1)
+        """メッセージを受信したときの処理
+        - RequestVote: 投票要求
+        - RequestVoteResponse: 投票応答
+        - AppendEntries: ログ追加要求/ハートビート
+        - AppendEntriesResponse: ログ追加応答
+        - Write: クライアントからのWrite要求
+        """
+        message_type = data.get('type')
+        term = data.get('term', 0)
         
-        # リーダーにログを追加
-        self.counter+=1
-        if  self.counter >= 2:
-            # ログの過半数以上をゲットしたら、コミットする
-            # ログをコミットする
-            # コミットしたログをステートマシンに適用する
-            # コミットしたログを削除する
-             self.counter = 1
+        # 受信したタームが現在のタームより大きい場合、フォロワーに戻る
+        if term > self.current_term:
+            self.current_term = term
+            self.state = 'follower'
+            self.voted_for = None
         
-        
-        # リーダーだったら、ログ過半数以上ゲットするまでまつ
-        # 
-        
+        if message_type == 'RequestVote':
+            await self.handle_vote_request(data)
+        elif message_type == 'RequestVoteResponse':
+            await self.handle_vote_response(data)
+        elif message_type == 'AppendEntries':
+            await self.handle_append_entries(data)
+        elif message_type == 'AppendEntriesResponse':
+            await self.handle_append_entries_response(data)
+        elif message_type == 'Write':
+            await self.handle_write_request(data)
 
-    # サンプルプログラム：ノード毎にカウンターを5秒ごとに送信する
-    # 5秒ごとにノード毎のカウントを自分を除くすべてのノードに送信する
     async def start(self):
-        from .server import Node
-        if self.node.name == "node1": # 自分がリーダーだったら
-            logentry = {"x": 100}
-            await asyncio.sleep(5)
-            self.logs.append(logentry) # 2番
-            for node in Node.cluster: 
-                if node.is_client: # 自分を除くすべてのノードに送信
-                    await node.send(logentry) # ３番 データ送信
-
-
-    def stop():
+        """ノードの起動時の初期化処理"""
+        self.init_timers()
         pass
+
+    async def send_heartbeat(self):
+        """ハートビートを送信する"""
+        if self.state != 'leader':
+            return
+        
+        # AppendEntriesリクエストを作成（空のエントリで）
+        for node in self.node.cluster:
+            if not node.is_client:
+                prev_index = self.next_index[node.name] - 1
+                request = {
+                    'type': 'AppendEntries',
+                    'term': self.current_term,
+                    'leader_id': self.node.name,
+                    'prev_log_index': prev_index,
+                    'prev_log_term': self.logs[prev_index]['term'] if prev_index >= 0 else 0,
+                    'entries': [],
+                    'leader_commit': self.commit_index
+                }
+                await node.send(request)
+
+    async def replicate_log(self, node_name):
+        """特定のフォロワーにログをレプリケートする"""
+        if self.state != 'leader':
+            return
+        
+        next_idx = self.next_index[node_name]
+        entries = self.logs[next_idx:]
+        
+        request = {
+            'type': 'AppendEntries',
+            'term': self.current_term,
+            'leader_id': self.node.name,
+            'prev_log_index': next_idx - 1,
+            'prev_log_term': self.logs[next_idx - 1]['term'] if next_idx > 0 else 0,
+            'entries': entries,
+            'leader_commit': self.commit_index
+        }
+        
+        node = next(n for n in self.node.cluster if n.name == node_name)
+        await node.send(request)
+
+    async def apply_logs(self):
+        """コミット済みのログをステートマシンに適用する"""
+        while self.last_applied < self.commit_index:
+            self.last_applied += 1
+            entry = self.logs[self.last_applied]
+            
+            # ステートマシンにコマンドを適用
+            for key, value in entry.items():
+                self.statemachine[key] = value
+
+    async def become_leader(self):
+        """リーダーになった時の初期化処理"""
+        if self.state != 'candidate':
+            return
+        
+        self.state = 'leader'
+        logger.info(f"{self.node.name} became leader for term {self.current_term}")
+        
+        # リーダー状態の初期化
+        for node in self.node.cluster:
+            if not node.is_client:
+                self.next_index[node.name] = len(self.logs)
+                self.match_index[node.name] = -1
+        
+        # 選挙タイマーを停止し、ハートビートタイマーを開始
+        self.election_timer.stop()
+        self.heartbeat_timer.start()
+        
+        # 最初のハートビートを即座に送信
+        await self.send_heartbeat()
+
+    async def handle_vote_response(self, data):
+        """投票の応答を処理する
+        - 候補者状態でない場合は無視
+        - 過半数の投票を得た場合はリーダーになる
+        - 現在のタームの投票のみを考慮
+        """
+        if self.state != 'candidate' or data['term'] != self.current_term:
+            return
+        
+        # 投票を集計
+        if data.get('vote_granted'):
+            self.received_votes += 1
+        
+        # 過半数の投票を得たらリーダーになる
+        # クラスタ内の全ノード（クライアントを除く）の過半数
+        cluster_size = sum(1 for node in self.node.cluster if not node.is_client)
+        if self.received_votes > cluster_size // 2:
+            await self.become_leader()
+
+    async def handle_vote_request(self, data):
+        """投票要求を処理する"""
+        # 投票条件をチェック
+        vote_granted = False
+        
+        # 1. 要求のタームが現在のターム以上
+        # 2. まだ投票していないか、同じ候補者に投票している
+        # 3. 候補者のログが自分のログと同じかより新しい
+        candidate_log_ok = (
+            data['last_log_term'] > (self.logs[-1]['term'] if self.logs else 0) or
+            (data['last_log_term'] == (self.logs[-1]['term'] if self.logs else 0) and
+             data['last_log_index'] >= len(self.logs) - 1)
+        )
+        
+        if (data['term'] >= self.current_term and
+            (self.voted_for is None or self.voted_for == data['candidate_id']) and
+            candidate_log_ok):
+            vote_granted = True
+            self.voted_for = data['candidate_id']
+            # 投票したらタイマーをリセット
+            self.election_timer.reset()
+        
+        # 投票結果を返信
+        response = {
+            'type': 'RequestVoteResponse',
+            'term': self.current_term,
+            'vote_granted': vote_granted
+        }
+        sender = next(n for n in self.node.cluster if n.name == data['candidate_id'])
+        await sender.send(response)
+
+    async def handle_append_entries(self, data):
+        """AppendEntriesリクエストを処理する"""
+        success = False
+        
+        # 1. リーダーのタームが現在のターム以上であることを確認
+        if data['term'] >= self.current_term:
+            self.state = 'follower'  # リーダーを認識
+            self.election_timer.reset()  # タイマーをリセット
+            
+            # 2. ログの整合性チェック
+            log_ok = (
+                data['prev_log_index'] == -1 or
+                (data['prev_log_index'] < len(self.logs) and
+                 self.logs[data['prev_log_index']]['term'] == data['prev_log_term'])
+            )
+            
+            if log_ok:
+                success = True
+                # 新しいエントリがある場合は追加
+                if data['entries']:
+                    # 競合するエントリを削除し、新しいエントリを追加
+                    self.logs = self.logs[:data['prev_log_index'] + 1]
+                    self.logs.extend(data['entries'])
+                
+                # コミットインデックスの更新
+                if data['leader_commit'] > self.commit_index:
+                    self.commit_index = min(data['leader_commit'], len(self.logs) - 1)
+                    await self.apply_logs()
+        
+        # 応答を返信
+        response = {
+            'type': 'AppendEntriesResponse',
+            'term': self.current_term,
+            'success': success
+        }
+        sender = next(n for n in self.node.cluster if n.name == data['leader_id'])
+        await sender.send(response)
+
+    async def handle_append_entries_response(self, data):
+        """AppendEntriesの応答を処理する
+        - 成功の場合、next_indexとmatch_indexを更新
+        - 失敗の場合、next_indexをデクリメントして再試行
+        """
+        if self.state != 'leader':
+            return
+            
+        sender = data['sender']
+        success = data['success']
+        
+        if success:
+            # 成功した場合、next_indexとmatch_indexを更新
+            self.next_index[sender] = len(self.logs)
+            self.match_index[sender] = len(self.logs) - 1
+            
+            # コミットインデックスの更新を試みる
+            await self.update_commit_index()
+        else:
+            # 失敗した場合、next_indexをデクリメントして再試行
+            if self.next_index[sender] > 0:
+                self.next_index[sender] -= 1
+                await self.replicate_log(sender)
+
+    async def handle_write_request(self, data):
+        """クライアントからのWrite要求を処理する"""
+        # クライアントの接続情報を保存（UDPProtocolインスタンス）
+        if data.get('connection'):
+            self.clients[data['sender']] = data['connection']
+        
+        if self.state != 'leader':
+            response = {
+                'type': 'WriteResponse',
+                'success': False,
+                'leader': self.voted_for,
+                'message': 'not leader'
+            }
+            # クライアントの場合はUDPProtocolのsendメソッドを使用
+            if data['sender'] in self.clients:
+                await self.clients[data['sender']].send(response)
+            else:
+                # サーバーノードの場合は既存の方法で送信
+                sender = next((n for n in self.node.cluster if n.name == data['sender']), None)
+                if sender:
+                    await sender.send(response)
+        else:
+            # 新しいログエントリを作成
+            entry = {
+                'term': self.current_term,
+                'command': {
+                    'type': 'set',
+                    'key': data['key'],
+                    'value': data['value']
+                }
+            }
+            
+            # ログに追加
+            self.logs.append(entry)
+            log_index = len(self.logs) - 1
+
+            # 全フォロワーにログを複製
+            for node in self.node.cluster:
+                if not node.is_client and node.name != self.node.name:
+                    await self.replicate_log(node.name)
+
+            # クライアントからの要求を追跡
+            # コミット完了時に応答を返すため
+            self.pending_requests[log_index] = {
+                'sender': data['sender'],
+                'timestamp': data.get('timestamp')
+            }
+
+    async def update_commit_index(self):
+        """コミットインデックスの更新
+        - 過半数のフォロワーが複製したログエントリをコミット
+        - 現在のタームのエントリのみをコミット
+        - コミットされたエントリに対応するクライアント要求に応答
+        """
+        for n in range(self.commit_index + 1, len(self.logs)):
+            if self.logs[n]['term'] != self.current_term:
+                continue
+                
+            # このインデックスのログを複製したフォロワーの数を数える
+            replicated = 1  # リーダー自身を含む
+            for match_idx in self.match_index.values():
+                if match_idx >= n:
+                    replicated += 1
+                    
+            # 過半数が複製していれば、コミットする
+            if replicated > len(self.node.cluster) // 2:
+                self.commit_index = n
+                await self.apply_logs()
+                
+                # 対応するクライアント要求に応答
+                if n in self.pending_requests:
+                    request = self.pending_requests.pop(n)
+                    response = {
+                        'type': 'WriteResponse',
+                        'success': True,
+                        'index': n,
+                        'timestamp': request['timestamp']
+                    }
+                    # クライアントの場合はUDPProtocolのsendメソッドを使用
+                    if request['sender'] in self.clients:
+                        await self.clients[request['sender']].send(response)
+                    else:
+                        # サーバーノードの場合は既存の方法で送信
+                        sender = next((n for n in self.node.cluster if n.name == request['sender']), None)
+                        if sender:
+                            await sender.send(response)

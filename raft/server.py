@@ -25,7 +25,10 @@ def stop():
 
 
 class Node:
+
+
     cluster = []
+
 
     def __init__(self, name, host, port, loop, is_client=False):
         self.name = name # ノード名
@@ -69,7 +72,8 @@ class Node:
             raise Exception("Only clients can send data")
         await self.request.put({"data": data})
 
-    async def broadcast(self, data):
-        for node in self.__class__.cluster:
+    @staticmethod
+    async def broadcast(data):
+        for node in Node.cluster:
             if node.is_client:
                 await node.send(data)   
