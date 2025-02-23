@@ -107,11 +107,11 @@ class State:
 
     async def start(self):
         """ノードの起動時の初期化処理"""
-        logger.info(f"Node {self.node.name} starting as {self.state}")
+        logger.info(f"{self.node.name} starting as {self.state}")
         self.init_timers()
         
         if self.state == 'follower':
-            logger.info(f"Node {self.node.name} starting election timer")
+            logger.info(f"{self.node.name} starting election timer")
             self.election_timer.start()  # フォロワーの場合のみ選挙タイマーを開始
 
         # リーダーの場合の処理
@@ -193,7 +193,7 @@ class State:
             # ステートマシンにコマンドを適用
             for key, value in entry.items():
                 self.statemachine[key] = value
-        logger.info(f"Node {self.node.name} applied log {self.last_applied}")
+        logger.info(f"{self.node.name} applied log {self.last_applied}")
 
     async def become_leader(self):
         """リーダーになった時の初期化処理"""
@@ -253,9 +253,9 @@ class State:
             self.election_timer.reset()
         
         if vote_granted:
-            logger.info(f"Node {self.node.name} voted for {message['candidate_id']} in term {self.current_term}")
+            logger.info(f"{self.node.name} voted for {message['candidate_id']} in term {self.current_term}")
         else:
-            logger.info(f"Node {self.node.name} rejected vote for {message['candidate_id']} in term {self.current_term}")
+            logger.info(f"{self.node.name} rejected vote for {message['candidate_id']} in term {self.current_term}")
         
         # 投票結果を返信
         response = {
@@ -286,7 +286,7 @@ class State:
                 success = True
                 # 新しいエントリがある場合は追加
                 if message['entries']:
-                    logger.info(f"Node {self.node.name} received {len(message['entries'])} new log entries from leader (commit_index: {message['leader_commit']})")
+                    logger.info(f"{self.node.name} received {len(message['entries'])} new log entries from leader (commit_index: {message['leader_commit']})")
                     # 競合するエントリを削除し、新しいエントリを追加
                     self.logs = self.logs[:message['prev_log_index'] + 1]
                     self.logs.extend(message['entries'])
@@ -330,7 +330,7 @@ class State:
         """クライアントからのWrite要求を処理する"""
         client_id = message.get('sender')
         request_id = message.get('request_id', str(uuid.uuid4()))
-        logger.info(f"Leader {self.node.name} received write request: {message}")
+        logger.info(f"{self.node.name} received write request: {message}")
         if self.state != 'leader':
             # リーダーでない場合は、リーダーの情報をクライアントに返す
             response = {
@@ -360,7 +360,6 @@ class State:
         
         # ログに追加
         self.logs.append(entry)
-        logger.info(f"Leader {self.node.name} received write request: {message}")
         
         # 全フォロワーにログを複製
         for node in self.node.cluster:
@@ -395,4 +394,4 @@ class State:
                     await client.send(response)
                     del self.pending_requests[request_id]
                 
-                logger.info(f"Node {self.node.name} committed logs up to index {self.commit_index}")
+                logger.info(f"{self.node.name} committed logs up to index {self.commit_index}")
