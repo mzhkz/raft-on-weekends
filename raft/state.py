@@ -341,5 +341,3 @@ class State:
                 self.commit_index = n
                 await self.apply_logs()
                 logger.info(f"Node {self.node.name} committed logs up to index {self.commit_index}")
-
-                if self.commit_index > self.last_applied:
