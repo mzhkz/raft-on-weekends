@@ -4,6 +4,9 @@ from .serializers import MessagePackSerializer
 from .logger import logger
 
 class BaseUDPProtocol(asyncio.DatagramProtocol):
+
+    ip_to_name_dicts = {}
+
     def __init__(self, queue, request_handler, loop, base_node=None):
         self.queue = queue
         self.request_handler = request_handler
@@ -41,19 +44,26 @@ class NodeUDPProtocol(BaseUDPProtocol):
             })
         self.request_handler(data)
 
-    @staticmethod
-    def _convert_ipv4_to_node_name(ip):
-        octets = ip.split('.')
-        if octets[2] == '0':
-            # ノードのIPアドレスの場合
-            node_id = str(int(octets[3]) - 1)
-            return f"node{node_id}"
-        elif octets[2] == '1':
-            # クライアントのIPアドレスの場合
-            client_id = str(int(octets[3]) - 1)
-            return f"client{client_id}"
-        else:
-            return "unknown"
+    # @staticmethod
+    # def _convert_ipv4_to_node_name(ip):
+    #     # octets = ip.split('.')
+    #     # if octets[2] == '0':
+    #     #     # ノードのIPアドレスの場合
+    #     #     node_id = str(int(octets[3]) - 1)
+    #     #     return f"node{node_id}"
+    #     # elif octets[2] == '1':
+    #     #     # クライアントのIPアドレスの場合
+    #     #     client_id = str(int(octets[3]) - 1)
+    #     #     return f"client{client_id}"
+    #     # else:
+    #     #     return "unknown"
+
+
+    def _convert_ipv4_to_node_name(self, ip):
+        for key, value in self.base_node.ip_to_name_dicts.items():
+            if value['host'] == ip:
+                return key
+        return "unknown"
 
 class ClientUDPProtocol(BaseUDPProtocol):
     def datagram_received(self, data, addr):

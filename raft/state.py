@@ -2,7 +2,7 @@ import asyncio
 from .logger import logger
 import random
 from .timer import Timer
-
+import uuid
 class State:
     """基本的にはここに必要なメソッドや変数を追加していく"""
     
@@ -31,6 +31,8 @@ class State:
         
         # クライアントのWrite要求を追跡するための辞書
         self.pending_requests = {}
+
+
 
     def init_timers(self):
         # 選挙タイムアウトタイマーの設定（150-300msのランダムな時間）
@@ -79,13 +81,12 @@ class State:
         - RequestVoteResponse: 投票応答
         - AppendEntries: ログ追加要求/ハートビート
         - AppendEntriesResponse: ログ追加応答
+        - ClientWrite: クライアントからのWrite要求
         """
-        message = data.get('data', {})  # dataフィールドからペイロードを取得
+        message = data.get('data', {})
         message_type = message.get('type')
         term = message.get('term', 0)
         
-        
-        # 受信したタームが現在のタームより大きい場合、フォロワーに戻る
         if term > self.current_term:
             self.current_term = term
             self.state = 'follower'
@@ -98,8 +99,11 @@ class State:
         elif message_type == 'AppendEntries':
             await self.handle_append_entries(message)
         elif message_type == 'AppendEntriesResponse':
-            message['sender'] = data.get('sender')  # senderの情報を追加
+            message['sender'] = data.get('sender')
             await self.handle_append_entries_response(message)
+        elif message_type == 'ClientWrite':  # クライアントからのWrite要求を処理
+            message['sender'] = data.get('sender')
+            await self.handle_client_write(message)
 
     async def start(self):
         """ノードの起動時の初期化処理"""
@@ -111,30 +115,31 @@ class State:
             self.election_timer.start()  # フォロワーの場合のみ選挙タイマーを開始
 
         # リーダーの場合の処理
-        while True:
-            await asyncio.sleep(5)  # 5秒ごとに実行
+        # while True:
+        #     await asyncio.sleep(5)  # 5秒ごとに実行
             
-            if self.state == 'leader':
-                # ランダム値の生成
-                x = random.randint(1, 100)
+        #     if self.state == 'leader':
+        #         # ランダム値の生成
+        #         x = random.randint(1, 100)
                 
-                # 新しいログエントリを作成
-                entry = {
-                    'term': self.current_term,
-                    'command': {
-                        'type': 'set',
-                        'key': f'random_value',
-                        'value': x
-                    }
-                }
+        #         # 新しいログエントリを作成
+        #         entry = {
+        #             'term': self.current_term,
+        #             'command': {
+        #                 'type': 'set',
+        #                 'key': f'random_value',
+        #                 'value': x
+        #             },
+        #             "request_id": str(uuid.uuid4())
+        #         }
                 
-                # ログに追加
-                self.logs.append(entry)
+        #         # ログに追加
+        #         self.logs.append(entry)
                 
-                # 全フォロワーにログを複製
-                for node in self.node.cluster:
-                    if not node.is_myself:  # 自分自身以外のノードに複製
-                        await self.replicate_log(node.name)
+        #         # 全フォロワーにログを複製
+        #         for node in self.node.cluster:
+        #             if not node.is_myself:  # 自分自身以外のノードに複製
+        #                 await self.replicate_log(node.name)
 
     async def send_heartbeat(self):
         """ハートビートを送信する"""
@@ -321,23 +326,73 @@ class State:
                 self.next_index[sender] -= 1
                 await self.replicate_log(sender)
 
+    async def handle_client_write(self, message):
+        """クライアントからのWrite要求を処理する"""
+        client_id = message.get('sender')
+        request_id = message.get('request_id', str(uuid.uuid4()))
+        logger.info(f"Leader {self.node.name} received write request: {message}")
+        if self.state != 'leader':
+            # リーダーでない場合は、リーダーの情報をクライアントに返す
+            response = {
+                'type': 'ClientWriteResponse',
+                'success': False,
+                'error': 'not_leader',
+                'leader_hint': self.voted_for  # 既知のリーダー情報
+            }
+            client = next(c for c in self.node.clients if c.name == client_id)
+            await client.send(response)
+            return
+
+        # 新しいログエントリを作成
+        entry = {
+            'term': self.current_term,
+            'command': {
+                'type': 'set',
+                'key': message['key'],
+                'value': message['value']
+            },
+            "request_id": request_id
+        }
+        
+        # リクエストを追跡するためにIDを保存
+        if request_id:
+            self.pending_requests[request_id] = client_id
+        
+        # ログに追加
+        self.logs.append(entry)
+        logger.info(f"Leader {self.node.name} received write request: {message}")
+        
+        # 全フォロワーにログを複製
+        for node in self.node.cluster:
+            if not node.is_myself:
+                await self.replicate_log(node.name)
+
     async def update_commit_index(self):
-        """コミットインデックスの更新
-        - 過半数のフォロワーが複製したログエントリをコミット
-        - 現在のタームのエントリのみをコミット
-        """
+        """コミットインデックスの更新"""
         for n in range(self.commit_index + 1, len(self.logs)):
             if self.logs[n]['term'] != self.current_term:
                 continue
                 
-            # このインデックスのログを複製したフォロワーの数を数える
-            replicated = 1  # リーダー自身を含む
+            replicated = 1
             for match_idx in self.match_index.values():
                 if match_idx >= n:
                     replicated += 1
                     
-            # 過半数が複製していれば、コミットする
             if replicated > len(self.node.cluster) // 2:
                 self.commit_index = n
                 await self.apply_logs()
+                
+                # コミット完了後、関連するクライアントリクエストに応答
+                entry = self.logs[n]
+                for request_id, client_id in list(self.pending_requests.items()):
+                    if entry['request_id'] == request_id:
+                        response = {
+                            'type': 'ClientWriteResponse',
+                            'success': True,
+                            'request_id': request_id
+                        }
+                    client = next(c for c in self.node.clients if c.name == client_id)
+                    await client.send(response)
+                    del self.pending_requests[request_id]
+                
                 logger.info(f"Node {self.node.name} committed logs up to index {self.commit_index}")

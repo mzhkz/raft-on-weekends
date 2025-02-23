@@ -1,1 +1,22 @@
-{"node1": 3333, "node2": 3334, "node3": 3335}
+{
+    "node1": {
+        "host": "10.0.0.2",
+        "export_port": 3333,
+        "internal_port": 8080
+    },
+    "node2": {
+        "host": "10.0.0.3",
+        "export_port": 3334,
+        "internal_port": 8080
+    },
+    "node3": {
+        "host": "10.0.0.4",
+        "export_port": 3335,
+        "internal_port": 8080
+    },
+    "client1": {
+        "host": "10.0.0.5",
+        "export_port": 5558,
+        "internal_port": 8888
+    }
+}
