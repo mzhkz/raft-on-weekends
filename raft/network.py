@@ -4,11 +4,12 @@ from .serializers import MessagePackSerializer
 from .logger import logger
 
 class BaseUDPProtocol(asyncio.DatagramProtocol):
-    def __init__(self, queue, request_handler, loop):
+    def __init__(self, queue, request_handler, loop, base_node=None):
         self.queue = queue
         self.request_handler = request_handler
         self.serializer = MessagePackSerializer
         self.loop = loop or asyncio.get_event_loop()
+        self.base_node = base_node
 
     def __call__(self):
         return self
@@ -33,23 +34,27 @@ class NodeUDPProtocol(BaseUDPProtocol):
     def datagram_received(self, data, addr):
         data = self.serializer.unpack(data)
         sender_ip = addr[0]
-        node_id = self._convert_ipv4_to_node_name(sender_ip)
+        
+        sender_name = self._convert_ipv4_to_node_name(sender_ip)
         data.update({
-                "sender": f"{node_id}",
-                "connection": None  # サーバーノードの場合はconnection不要
+                "sender": f"{sender_name}"
             })
         self.request_handler(data)
 
     @staticmethod
     def _convert_ipv4_to_node_name(ip):
-        node_id = str(int(ip.split('.')[3])-1)
-        return f"node{node_id}"
+        octets = ip.split('.')
+        if octets[2] == '0':
+            # ノードのIPアドレスの場合
+            node_id = str(int(octets[3]) - 1)
+            return f"node{node_id}"
+        elif octets[2] == '1':
+            # クライアントのIPアドレスの場合
+            client_id = str(int(octets[3]) - 1)
+            return f"client{client_id}"
+        else:
+            return "unknown"
 
 class ClientUDPProtocol(BaseUDPProtocol):
     def datagram_received(self, data, addr):
-        data = self.serializer.unpack(data)
-        sender_ip = addr[0]
-        data.update({
-                "sender": f"client_{sender_ip.replace('.', '_')}"
-        })
-        self.request_handler(data)
+        pass

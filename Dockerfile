@@ -14,4 +14,4 @@ RUN pip install -r requirements.txt
 EXPOSE 8080
 
 # Run run_node.py when the container launches
-CMD ["python", "run_node.py"]
+CMD ["python", "./raft/run_node.py"]

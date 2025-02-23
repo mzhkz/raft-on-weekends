@@ -1,28 +1,56 @@
 networks:
-  raft-network:
+  raft-client-network:
+    driver: bridge
+    ipam:
+      config:
+      - subnet: 10.0.1.0/24
+      driver: default
+  raft-node-network:
     driver: bridge
     ipam:
       config:
       - subnet: 10.0.0.0/24
       driver: default
 services:
+  client1:
+    build: .
+    command:
+    - python
+    - -m
+    - client.run_client
+    - --node
+    - 10.0.1.2
+    - --cluster
+    - node1,node2,node3
+    - --name
+    - client1
+    container_name: client1
+    networks:
+      raft-client-network:
+        ipv4_address: 10.0.1.2
+    ports:
+    - 5555:8888/udp
   node1:
     build: .
     command:
     - python
-    - run_node.py
+    - -m
+    - raft.run_node
     - --node
     - 10.0.0.2
     - --cluster
     - node2,node3
     - --name
     - node1
+    - --clients
+    - client1
     container_name: node1
     environment:
     - NODE=node1
     - CLUSTER=node2,node3
+    - CLIENTS=client1
     networks:
-      raft-network:
+      raft-node-network:
         ipv4_address: 10.0.0.2
     ports:
     - 3333:8080/udp
@@ -30,19 +58,23 @@ services:
     build: .
     command:
     - python
-    - run_node.py
+    - -m
+    - raft.run_node
     - --node
     - 10.0.0.3
     - --cluster
     - node1,node3
     - --name
     - node2
+    - --clients
+    - client1
     container_name: node2
     environment:
     - NODE=node2
     - CLUSTER=node1,node3
+    - CLIENTS=client1
     networks:
-      raft-network:
+      raft-node-network:
         ipv4_address: 10.0.0.3
     ports:
     - 3334:8080/udp
@@ -50,19 +82,23 @@ services:
     build: .
     command:
     - python
-    - run_node.py
+    - -m
+    - raft.run_node
     - --node
     - 10.0.0.4
     - --cluster
     - node1,node2
     - --name
     - node3
+    - --clients
+    - client1
     container_name: node3
     environment:
     - NODE=node3
     - CLUSTER=node1,node2
+    - CLIENTS=client1
     networks:
-      raft-network:
+      raft-node-network:
         ipv4_address: 10.0.0.4
     ports:
     - 3335:8080/udp
