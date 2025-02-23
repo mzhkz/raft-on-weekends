@@ -35,7 +35,7 @@ class NodeUDPProtocol(BaseUDPProtocol):
         sender_ip = addr[0]
         node_id = self._convert_ipv4_to_node_name(sender_ip)
         data.update({
-                "sender": f"node{node_id}",
+                "sender": f"{node_id}",
                 "connection": None  # サーバーノードの場合はconnection不要
             })
         self.request_handler(data)
