@@ -49,12 +49,16 @@ class State:
             callback=self.send_heartbeat
         )
 
+        logger.info(f"Node {self.node.name} initialized timers")
+
     async def start_election(self):
         """選挙を開始する"""
         self.state = 'candidate'
         self.current_term += 1
         self.voted_for = self.node.name
         self.received_votes = 1  # 自分への投票を含める
+        
+        logger.info(f"Node {self.node.name} starting election for term {self.current_term}")
         
         # 投票要求を送信
         request = {
@@ -65,10 +69,8 @@ class State:
             'last_log_term': self.logs[-1]['term'] if self.logs else 0
         }
         
-        # クラスタ内の他のノードに投票要求を送信
-        for node in self.node.cluster:
-            if not node.is_client:
-                await node.send(request)
+        # クラスタ内の全ノードに投票要求を送信
+        await self.node.broadcast(request)
 
     # サンプルプログラム：ノードから受信したら、カウンターを増やす
     # data: {"sender": "node_name", "data": "data"}
@@ -82,8 +84,11 @@ class State:
         - AppendEntriesResponse: ログ追加応答
         - Write: クライアントからのWrite要求
         """
-        message_type = data.get('type')
-        term = data.get('term', 0)
+        message = data.get('data', {})  # dataフィールドからペイロードを取得
+        message_type = message.get('type')
+        term = message.get('term', 0)
+        
+        logger.info(f"received {message_type} from {data.get('sender', 'unknown')} (term: {term})")
         
         # 受信したタームが現在のタームより大きい場合、フォロワーに戻る
         if term > self.current_term:
@@ -92,29 +97,38 @@ class State:
             self.voted_for = None
         
         if message_type == 'RequestVote':
-            await self.handle_vote_request(data)
+            await self.handle_vote_request(message)
         elif message_type == 'RequestVoteResponse':
-            await self.handle_vote_response(data)
+            await self.handle_vote_response(message)
         elif message_type == 'AppendEntries':
-            await self.handle_append_entries(data)
+            await self.handle_append_entries(message)
         elif message_type == 'AppendEntriesResponse':
-            await self.handle_append_entries_response(data)
+            message['sender'] = data.get('sender')  # senderの情報を追加
+            await self.handle_append_entries_response(message)
         elif message_type == 'Write':
-            await self.handle_write_request(data)
+            message['sender'] = data.get('sender')  # senderの情報を追加
+            message['connection'] = data.get('connection')  # connectionの情報を追加
+            await self.handle_write_request(message)
 
     async def start(self):
         """ノードの起動時の初期化処理"""
+        logger.info(f"Node {self.node.name} starting as {self.state}")
         self.init_timers()
-        pass
+        
+        if self.state == 'follower':
+            logger.info(f"Node {self.node.name} starting election timer")
+            self.election_timer.start()  # フォロワーの場合のみ選挙タイマーを開始
 
     async def send_heartbeat(self):
         """ハートビートを送信する"""
+        logger.info(f"Node {self.node.name} sending heartbeat")
         if self.state != 'leader':
             return
         
         # AppendEntriesリクエストを作成（空のエントリで）
         for node in self.node.cluster:
-            if not node.is_client:
+            # クライアントの場合には送信する
+            if node.is_client:
                 prev_index = self.next_index[node.name] - 1
                 request = {
                     'type': 'AppendEntries',
@@ -168,7 +182,7 @@ class State:
         
         # リーダー状態の初期化
         for node in self.node.cluster:
-            if not node.is_client:
+            if node.is_client:
                 self.next_index[node.name] = len(self.logs)
                 self.match_index[node.name] = -1
         
@@ -179,26 +193,21 @@ class State:
         # 最初のハートビートを即座に送信
         await self.send_heartbeat()
 
-    async def handle_vote_response(self, data):
-        """投票の応答を処理する
-        - 候補者状態でない場合は無視
-        - 過半数の投票を得た場合はリーダーになる
-        - 現在のタームの投票のみを考慮
-        """
-        if self.state != 'candidate' or data['term'] != self.current_term:
+    async def handle_vote_response(self, message):
+        """投票の応答を処理する"""
+        if self.state != 'candidate' or message['term'] != self.current_term:
             return
         
         # 投票を集計
-        if data.get('vote_granted'):
+        if message.get('vote_granted'):
             self.received_votes += 1
         
         # 過半数の投票を得たらリーダーになる
-        # クラスタ内の全ノード（クライアントを除く）の過半数
-        cluster_size = sum(1 for node in self.node.cluster if not node.is_client)
+        cluster_size = len(self.node.cluster)
         if self.received_votes > cluster_size // 2:
             await self.become_leader()
 
-    async def handle_vote_request(self, data):
+    async def handle_vote_request(self, message):
         """投票要求を処理する"""
         # 投票条件をチェック
         vote_granted = False
@@ -207,18 +216,23 @@ class State:
         # 2. まだ投票していないか、同じ候補者に投票している
         # 3. 候補者のログが自分のログと同じかより新しい
         candidate_log_ok = (
-            data['last_log_term'] > (self.logs[-1]['term'] if self.logs else 0) or
-            (data['last_log_term'] == (self.logs[-1]['term'] if self.logs else 0) and
-             data['last_log_index'] >= len(self.logs) - 1)
+            message['last_log_term'] > (self.logs[-1]['term'] if self.logs else 0) or
+            (message['last_log_term'] == (self.logs[-1]['term'] if self.logs else 0) and
+             message['last_log_index'] >= len(self.logs) - 1)
         )
         
-        if (data['term'] >= self.current_term and
-            (self.voted_for is None or self.voted_for == data['candidate_id']) and
+        if (message['term'] >= self.current_term and
+            (self.voted_for is None or self.voted_for == message['candidate_id']) and
             candidate_log_ok):
             vote_granted = True
-            self.voted_for = data['candidate_id']
+            self.voted_for = message['candidate_id']
             # 投票したらタイマーをリセット
             self.election_timer.reset()
+        
+        if vote_granted:
+            logger.info(f"Node {self.node.name} voted for {message['candidate_id']} in term {self.current_term}")
+        else:
+            logger.info(f"Node {self.node.name} rejected vote for {message['candidate_id']} in term {self.current_term}")
         
         # 投票結果を返信
         response = {
@@ -226,36 +240,37 @@ class State:
             'term': self.current_term,
             'vote_granted': vote_granted
         }
-        sender = next(n for n in self.node.cluster if n.name == data['candidate_id'])
+        sender = next(n for n in self.node.cluster if n.name == message['candidate_id'])
         await sender.send(response)
 
-    async def handle_append_entries(self, data):
+    async def handle_append_entries(self, message):
         """AppendEntriesリクエストを処理する"""
         success = False
         
         # 1. リーダーのタームが現在のターム以上であることを確認
-        if data['term'] >= self.current_term:
+        if message['term'] >= self.current_term:
             self.state = 'follower'  # リーダーを認識
             self.election_timer.reset()  # タイマーをリセット
             
             # 2. ログの整合性チェック
             log_ok = (
-                data['prev_log_index'] == -1 or
-                (data['prev_log_index'] < len(self.logs) and
-                 self.logs[data['prev_log_index']]['term'] == data['prev_log_term'])
+                message['prev_log_index'] == -1 or
+                (message['prev_log_index'] < len(self.logs) and
+                 self.logs[message['prev_log_index']]['term'] == message['prev_log_term'])
             )
             
             if log_ok:
                 success = True
                 # 新しいエントリがある場合は追加
-                if data['entries']:
+                if message['entries']:
+                    logger.info(f"Node {self.node.name} received {len(message['entries'])} new log entries from leader")
                     # 競合するエントリを削除し、新しいエントリを追加
-                    self.logs = self.logs[:data['prev_log_index'] + 1]
-                    self.logs.extend(data['entries'])
+                    self.logs = self.logs[:message['prev_log_index'] + 1]
+                    self.logs.extend(message['entries'])
                 
                 # コミットインデックスの更新
-                if data['leader_commit'] > self.commit_index:
-                    self.commit_index = min(data['leader_commit'], len(self.logs) - 1)
+                if message['leader_commit'] > self.commit_index:
+                    self.commit_index = min(message['leader_commit'], len(self.logs) - 1)
                     await self.apply_logs()
         
         # 応答を返信
@@ -264,19 +279,16 @@ class State:
             'term': self.current_term,
             'success': success
         }
-        sender = next(n for n in self.node.cluster if n.name == data['leader_id'])
+        sender = next(n for n in self.node.cluster if n.name == message['leader_id'])
         await sender.send(response)
 
-    async def handle_append_entries_response(self, data):
-        """AppendEntriesの応答を処理する
-        - 成功の場合、next_indexとmatch_indexを更新
-        - 失敗の場合、next_indexをデクリメントして再試行
-        """
+    async def handle_append_entries_response(self, message):
+        """AppendEntriesの応答を処理する"""
         if self.state != 'leader':
             return
             
-        sender = data['sender']
-        success = data['success']
+        sender = message['sender']
+        success = message['success']
         
         if success:
             # 成功した場合、next_indexとmatch_indexを更新
@@ -291,11 +303,13 @@ class State:
                 self.next_index[sender] -= 1
                 await self.replicate_log(sender)
 
-    async def handle_write_request(self, data):
+    async def handle_write_request(self, message):
         """クライアントからのWrite要求を処理する"""
-        # クライアントの接続情報を保存（UDPProtocolインスタンス）
-        if data.get('connection'):
-            self.clients[data['sender']] = data['connection']
+        logger.info(f"Node {self.node.name} received write request: key={message.get('key')}, value={message.get('value')}")
+        
+        # クライアントの接続情報を保存
+        if message.get('connection'):
+            self.clients[message['sender']] = message['connection']
         
         if self.state != 'leader':
             response = {
@@ -304,12 +318,10 @@ class State:
                 'leader': self.voted_for,
                 'message': 'not leader'
             }
-            # クライアントの場合はUDPProtocolのsendメソッドを使用
-            if data['sender'] in self.clients:
-                await self.clients[data['sender']].send(response)
+            if message['sender'] in self.clients:
+                await self.clients[message['sender']].send(response)
             else:
-                # サーバーノードの場合は既存の方法で送信
-                sender = next((n for n in self.node.cluster if n.name == data['sender']), None)
+                sender = next((n for n in self.node.cluster if n.name == message['sender']), None)
                 if sender:
                     await sender.send(response)
         else:
@@ -318,8 +330,8 @@ class State:
                 'term': self.current_term,
                 'command': {
                     'type': 'set',
-                    'key': data['key'],
-                    'value': data['value']
+                    'key': message['key'],
+                    'value': message['value']
                 }
             }
             
@@ -329,14 +341,12 @@ class State:
 
             # 全フォロワーにログを複製
             for node in self.node.cluster:
-                if not node.is_client and node.name != self.node.name:
-                    await self.replicate_log(node.name)
+                await self.replicate_log(node.name)
 
             # クライアントからの要求を追跡
-            # コミット完了時に応答を返すため
             self.pending_requests[log_index] = {
-                'sender': data['sender'],
-                'timestamp': data.get('timestamp')
+                'sender': message['sender'],
+                'timestamp': message.get('timestamp')
             }
 
     async def update_commit_index(self):
@@ -369,11 +379,13 @@ class State:
                         'index': n,
                         'timestamp': request['timestamp']
                     }
-                    # クライアントの場合はUDPProtocolのsendメソッドを使用
+                    # クライアントへの応答
                     if request['sender'] in self.clients:
                         await self.clients[request['sender']].send(response)
                     else:
-                        # サーバーノードの場合は既存の方法で送信
                         sender = next((n for n in self.node.cluster if n.name == request['sender']), None)
                         if sender:
                             await sender.send(response)
+
+                if self.commit_index > self.last_applied:
+                    logger.info(f"Node {self.node.name} committed logs up to index {self.commit_index}")

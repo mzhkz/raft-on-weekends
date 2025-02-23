@@ -1,4 +1,5 @@
 import asyncio
+import json
 from .serializers import MessagePackSerializer
 from .logger import logger
 
@@ -34,6 +35,7 @@ class UDPProtocol(asyncio.DatagramProtocol):
                 "sender": f"node{node_id}",
                 "connection": None  # サーバーノードの場合はconnection不要
             })
+            logger.info(json.dumps(data))
         else:
             # クライアントの場合
             data.update({
