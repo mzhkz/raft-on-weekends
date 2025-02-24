@@ -49,16 +49,12 @@ class PerformanceEvaluator:
     def handle_read_response(self, response):
         request_id = response.get('request_id')
         if not response.get('success'):
-            logger.error(f"読み込みに失敗しました: {response}")
             # リーダーでない場合、新しいリーダーに接続
             if response.get('error') == 'not_leader':
                 new_leader = response.get('leader_hint')
                 if new_leader:
                     logger.info(f"リーダーを{new_leader}に変更します")
                     self.current_leader = new_leader
-                    # 保留中のリクエストを再送信
-                    if request_id in self.read_events:
-                        self.read_events[request_id].set()
         else:
             # 読み込みリクエストの場合は、結果を保存して、read_eventを発火
             if request_id in self.read_events:
@@ -181,7 +177,6 @@ class PerformanceEvaluator:
                     await self.write('random_number', value)
                 except Exception as e:
                     logger.error(f"エラーが発生しました: {e}")
-                    break
         finally:
             self.stats_timer.stop()  # 統計タイマーを停止
             self.transport.close()

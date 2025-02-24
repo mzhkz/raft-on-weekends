@@ -68,9 +68,6 @@ class PerformanceEvaluator:
                 if new_leader:
                     logger.info(f"リーダーを{new_leader}に変更します")
                     self.current_leader = new_leader
-                    # 保留中のリクエストを再送信
-                    if request_id in self.commit_events:
-                        self.commit_events[request_id].set()
         else:
             # logger.info(f"✅ コミット成功: request_id={request_id}")
             if request_id in self.commit_events:
@@ -173,6 +170,12 @@ class PerformanceEvaluator:
         
         try:
             await asyncio.wait_for(self.commit_events[request_id].wait(), timeout=5.0)
+
+            # 書き込み結果を確認
+            result =await self.read(key)
+            if result != value:
+                raise Exception(f"書き込み結果が一致しません: {result} != {value}")
+
             end_time = asyncio.get_event_loop().time()  # リクエスト完了時間
             latency = end_time - start_time
             self.total_latency += latency
@@ -216,7 +219,6 @@ class PerformanceEvaluator:
                     await self.write('random_number', value)
                 except Exception as e:
                     logger.error(f"エラーが発生しました: {e}")
-                    break
         finally:
             self.stats_timer.stop()  # 統計タイマーを停止
             self.transport.close()
