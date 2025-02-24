@@ -6,7 +6,7 @@ from .timer import Timer
 from crypto.VSS import split, verify
 from crypto.parameters import KEY_2048_PARAMS
 
-class State:
+class OState:
     """基本的にはここに必要なメソッドや変数を追加していく"""
     
     def __init__(self, node):

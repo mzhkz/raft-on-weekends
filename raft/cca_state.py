@@ -3,7 +3,7 @@ from .logger import logger
 import random
 from .timer import Timer
 import uuid
-class State:
+class CCAState:
     """基本的にはここに必要なメソッドや変数を追加していく"""
     
     def __init__(self, node):
