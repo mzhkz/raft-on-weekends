@@ -102,10 +102,15 @@ class PerformanceEvaluator:
         await self.send_request({"data": request})
 
         # リーダーからのレスポンスを待つ
-        await asyncio.wait_for(self.read_events[request_id].wait(), timeout=5.0)
-        del self.read_events[request_id]
-        result = self.read_results[request_id]
-        del self.read_results[request_id]
+        try:
+            await asyncio.wait_for(self.read_events[request_id].wait(), timeout=5.0)
+        except asyncio.TimeoutError:
+            logger.error(f"リーダーからのReadレスポンスがタイムアウトしました: {request_id}")
+            return None
+        finally:
+            del self.read_events[request_id]
+            result = self.read_results[request_id]
+            del self.read_results[request_id]
 
         return result
 
@@ -127,6 +132,12 @@ class PerformanceEvaluator:
         
         try:
             await asyncio.wait_for(self.commit_events[request_id].wait(), timeout=5.0)
+
+            # 書き込み結果を確認
+            result =await self.read(key)
+            if result != value:
+                raise Exception(f"書き込み結果が一致しません: {result} != {value}")
+
             end_time = asyncio.get_event_loop().time()  # リクエスト完了時間
             latency = end_time - start_time
             self.total_latency += latency
@@ -166,7 +177,7 @@ class PerformanceEvaluator:
         try:
             while True:
                 try:
-                    value = 892 
+                    value = 892
                     await self.write('random_number', value)
                 except Exception as e:
                     logger.error(f"エラーが発生しました: {e}")

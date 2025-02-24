@@ -123,10 +123,15 @@ class PerformanceEvaluator:
         await self.send_request({"data": request}, list(self.cluster_info.keys())[1])  # もう一つのノードにリクエスト
 
         # リーダーからのレスポンスを待つ
-        await asyncio.wait_for(self.read_events[request_id].wait(), timeout=5.0)
-        del self.read_events[request_id]
-        result = self.read_results[request_id]
-        del self.read_results[request_id]
+        try:
+            await asyncio.wait_for(self.read_events[request_id].wait(), timeout=5.0)
+        except asyncio.TimeoutError:
+            logger.error(f"リーダーからのReadレスポンスがタイムアウトしました: {request_id}")
+            return None
+        finally:
+            del self.read_events[request_id]
+            result = self.read_results[request_id]
+            del self.read_results[request_id]
 
         return result
 

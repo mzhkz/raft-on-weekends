@@ -107,6 +107,9 @@ class State:
         elif message_type == 'ClientWrite':  # クライアントからのWrite要求を処理
             message['sender'] = data.get('sender')
             await self.handle_client_write(message)
+        elif message_type == 'ClientRead':
+            message['sender'] = data.get('sender')
+            await self.handle_client_read(message)
 
     async def start(self):
         """ノードの起動時の初期化処理"""
@@ -311,6 +314,37 @@ class State:
             if self.next_index[sender] > 0:
                 self.next_index[sender] -= 1
                 await self.replicate_log(sender)
+
+    async def handle_client_read(self, message):
+        """クライアントからのRead要求を処理する"""
+        client_id = message.get('sender')
+        request_id = message.get('request_id', str(uuid.uuid4()))
+
+        # キーからバケットIDを取得
+        key = message.get('key')
+        # キーが存在しない場合はエラー
+        if not self.statemachine.get(key):
+            response = {
+                'type': 'ClientReadResponse',
+                'success': False,
+                'error': 'key_not_found',
+                'request_id': request_id
+            }
+            client = next(c for c in self.node.clients if c.name == client_id)
+            await client.send(response)
+            return
+        
+        value = self.statemachine.get(key)
+        # バケットが存在する場合は、シェアを返す
+        response = {
+            'type': 'ClientReadResponse',
+            'success': True,
+            'value': value,
+            'request_id': request_id
+        }
+
+        client = next(c for c in self.node.clients if c.name == client_id)
+        await client.send(response)
 
     async def handle_client_write(self, message):
         """クライアントからのWrite要求を処理する"""
