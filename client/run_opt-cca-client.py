@@ -13,17 +13,19 @@ class PerformanceEvaluator:
     def __init__(self, name):
         self.name = name
         self.commit_events = {}
+        self.read_events = {}
         self.current_leader = 'node1'  # デフォルトのリーダー
         self.cluster_info = {}
         self.transport = None
         self.protocol = None
         self.node_host_port = {}
+        self.read_results = {}
         
         # パフォーマンス測定用の変数を追加
         self.total_requests = 0
         self.successful_requests = 0
         self.total_latency = 0
-        self.start_time = None
+        self.start_time = None  
         
         self.load_node_portlist()
         
@@ -80,10 +82,19 @@ class PerformanceEvaluator:
     def handle_get_share_response(self, response):
         """シェアを受け取った時の処理"""
         request_id = response.get('request_id')
-        if not response.get('success'):
-            logger.error(f"シェアの取得に失敗しました: request_id={request_id}")
-        else:
-            logger.info(f"シェアを受け取りました: request_id={request_id}")
+        if response.get('success'):
+            # 読み込みリクエストの場合は、結果を保存して、read_eventを発火
+            if request_id in self.read_events:
+                # シェアを保存
+                self.read_results[request_id].append(response.get('shares'))
+                # 2個のノードからシェアをもらったら、read_eventを発火
+                if len(self.read_results[request_id]) >= 2:
+                    total_shares = []
+                    # シェアを一次元に結合
+                    for result in self.read_results[request_id]:
+                        total_shares.extend(result)
+                    self.read_results[request_id] = total_shares
+                    self.read_events[request_id].set()
 
     async def send_request(self, request, target_node):
         leader_ip = self.node_host_port[target_node]['host']
@@ -93,6 +104,28 @@ class PerformanceEvaluator:
 
     async def send_request(self, request):
         await self.send_request(request, self.current_leader)
+
+    async def read(self, key):
+        request_id = str(uuid.uuid4())
+        self.read_events[request_id] = asyncio.Event()
+
+        request = {
+            'type': 'ClientGetShare',
+            'key': key,
+            'request_id': request_id,
+        }
+
+        # リーダーともう一つのノードにリクエストを送信
+        await self.send_request({"data": request})  # リーダーにリクエスト
+        await self.send_request({"data": request}, list(self.cluster_info.keys())[1])  # もう一つのノードにリクエスト
+
+        # リーダーからのレスポンスを待つ
+        await asyncio.wait_for(self.read_events[request_id].wait(), timeout=5.0)
+        del self.read_events[request_id]
+        result = self.read_results[request_id]
+        del self.read_results[request_id]
+
+        return result
 
     async def write(self, key, value):
         start_time = asyncio.get_event_loop().time()  # リクエスト開始時間

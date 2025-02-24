@@ -11,12 +11,13 @@ class PerformanceEvaluator:
     def __init__(self, name):
         self.name = name
         self.commit_events = {}
+        self.read_events = {}
         self.current_leader = 'node1'  # デフォルトのリーダー
         self.cluster_info = {}
         self.transport = None
         self.protocol = None
         self.node_host_port = {}
-        
+        self.read_results = {}
         # パフォーマンス測定用の変数を追加
         self.total_requests = 0
         self.successful_requests = 0
@@ -42,20 +43,45 @@ class PerformanceEvaluator:
     def handle_response(self, response):
         request_id = response.get('request_id')
         if response.get('type') == 'ClientWriteResponse':
-            if not response.get('success'):
-                # リーダーでない場合、新しいリーダーに接続
-                if response.get('error') == 'not_leader':
-                    new_leader = response.get('leader_hint')
-                    if new_leader:
-                        logger.info(f"リーダーを{new_leader}に変更します")
-                        self.current_leader = new_leader
-                        # 保留中のリクエストを再送信
-                        if request_id in self.commit_events:
-                            self.commit_events[request_id].set()
-            else:
-                # logger.info(f"✅ コミット成功: request_id={request_id}")
-                if request_id in self.commit_events:
-                    self.commit_events[request_id].set()
+            self.handle_write_response(response)
+        elif response.get('type') == 'ClientReadResponse':
+            self.handle_read_response(response)
+
+    def handle_read_response(self, response):
+        request_id = response.get('request_id')
+        if not response.get('success'):
+            # リーダーでない場合、新しいリーダーに接続
+            if response.get('error') == 'not_leader':
+                new_leader = response.get('leader_hint')
+                if new_leader:
+                    logger.info(f"リーダーを{new_leader}に変更します")
+                    self.current_leader = new_leader
+                    # 保留中のリクエストを再送信
+                    if request_id in self.read_events:
+                        self.read_events[request_id].set()
+        else:
+            # 読み込みリクエストの場合は、結果を保存して、read_eventを発火
+            if request_id in self.read_events:
+                self.read_results[request_id] = response.get('value')
+                self.read_events[request_id].set()
+
+    def handle_write_response(self, response):
+        request_id = response.get('request_id')
+        if not response.get('success'):
+            # リーダーでない場合、新しいリーダーに接続
+            if response.get('error') == 'not_leader':
+                new_leader = response.get('leader_hint')
+                if new_leader:
+                    logger.info(f"リーダーを{new_leader}に変更します")
+                    self.current_leader = new_leader
+                    # 保留中のリクエストを再送信
+                    if request_id in self.commit_events:
+                        self.commit_events[request_id].set()
+        else:
+            # logger.info(f"✅ コミット成功: request_id={request_id}")
+            if request_id in self.commit_events:
+                self.commit_events[request_id].set()
+                
 
     async def send_request(self, request):
         leader_node = self.current_leader
@@ -63,6 +89,25 @@ class PerformanceEvaluator:
         leader_port = self.node_host_port[leader_node]['internal_port']
         data = MessagePackSerializer.pack(request)
         self.transport.sendto(data, (leader_ip, leader_port))
+
+    async def read(self, key):
+        request_id = str(uuid.uuid4())
+        self.read_events[request_id] = asyncio.Event()
+
+        request = {
+            'type': 'ClientRead',
+            'key': key,
+            'request_id': request_id,
+        }
+        await self.send_request({"data": request})
+
+        # リーダーからのレスポンスを待つ
+        await asyncio.wait_for(self.read_events[request_id].wait(), timeout=5.0)
+        del self.read_events[request_id]
+        result = self.read_results[request_id]
+        del self.read_results[request_id]
+
+        return result
 
     async def write(self, key, value):
         start_time = asyncio.get_event_loop().time()  # リクエスト開始時間
