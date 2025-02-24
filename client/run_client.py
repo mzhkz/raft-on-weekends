@@ -41,7 +41,6 @@ class PerformanceEvaluator:
         )
 
     def handle_response(self, response):
-        request_id = response.get('request_id')
         if response.get('type') == 'ClientWriteResponse':
             self.handle_write_response(response)
         elif response.get('type') == 'ClientReadResponse':
@@ -50,6 +49,7 @@ class PerformanceEvaluator:
     def handle_read_response(self, response):
         request_id = response.get('request_id')
         if not response.get('success'):
+            logger.error(f"読み込みに失敗しました: {response}")
             # リーダーでない場合、新しいリーダーに接続
             if response.get('error') == 'not_leader':
                 new_leader = response.get('leader_hint')

@@ -31,11 +31,12 @@ class State:
         self.heartbeat_timer = None
         
         # クライアントのWrite要求を追跡するための辞書
-        self.pending_requests = {}
+        self.pending_requests = {} # クライアントのWrite要求を追跡するための辞書
 
         ## cca-Raft
-        self.share_buckets = {}
-        self.bucket_events = {}
+        self.share_buckets = {} # バケットを保存する辞書
+        self.bucket_events = {} # バケット作成を待つためのイベント
+        # self.commit_events = {} # 書き込み完了を待つためのイベント
 
         self.garbage_collection_timer = None
 
