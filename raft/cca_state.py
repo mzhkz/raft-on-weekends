@@ -36,7 +36,7 @@ class State:
         ## cca-Raft
         self.share_buckets = {} # バケットを保存する辞書
         self.bucket_events = {} # バケット作成を待つためのイベント
-        # self.commit_events = {} # 書き込み完了を待つためのイベント
+        self.read_locks = {} # 書き込み完了を待つためのイベント
 
         self.garbage_collection_timer = None
 
@@ -181,11 +181,14 @@ class State:
         while self.last_applied < self.commit_index:
             self.last_applied += 1
             entry = self.logs[self.last_applied]
+            entry_key = entry['command']['key']
             
-            self.statemachine[entry['command']['key']] = {
+            self.statemachine[entry_key] = {
                 'value': entry['command']['value'],
                 'bucket_id': entry['command']['bucket_id']
             }
+            # 読み込みロックを解除
+            self.read_locks[entry_key].set() 
         # logger.info(f"{self.node.name} applied log {self.last_applied}")
 
     async def become_leader(self):
@@ -394,6 +397,9 @@ class State:
         
         # ログに追加
         self.logs.append(entry)
+
+        # 書き込むキーへの読み込みをロック
+        self.read_locks[message['key']] = asyncio.Event()
         
         # 全フォロワーにログを複製
         for node in self.node.cluster:
@@ -437,8 +443,16 @@ class State:
 
         # キーからバケットIDを取得
         key = message.get('key')
+
+        # 読み取りロックがかかっていれば、ロックが解除されるまで待つ
+        if self.read_locks.get(key):
+            await self.read_locks[key].wait()
+            del self.read_locks[key]
+        
         bucket_id = self.statemachine.get(key, {}).get('bucket_id')
         bucket = self.share_buckets.get(bucket_id)
+
+        
 
         # バケットが存在しない場合はエラー
         if not bucket:
