@@ -14,6 +14,7 @@ class State:
         self.current_term = 0  # 現在のターム
         self.voted_for = None  # このタームで投票したノード
         self.state = 'follower'  # ノードの状態（follower, candidate, leader）
+        self.leader_id = None
         
         # ログとステートマシン
         self.logs = []  # ログエントリのリスト
@@ -47,8 +48,6 @@ class State:
             interval=0.05,
             callback=self.send_heartbeat
         )
-
-        logger.info(f"Node {self.node.name} initialized timers")
 
     async def start_election(self):
         """選挙を開始する"""
@@ -91,6 +90,7 @@ class State:
             self.current_term = term
             self.state = 'follower'
             self.voted_for = None
+            self.leader_id = None
         
         if message_type == 'RequestVote':
             await self.handle_vote_request(message)
@@ -111,7 +111,7 @@ class State:
         self.init_timers()
         
         if self.state == 'follower':
-            logger.info(f"{self.node.name} starting election timer")
+            # logger.info(f"{self.node.name} starting election timer")
             self.election_timer.start()  # フォロワーの場合のみ選挙タイマーを開始
 
         # リーダーの場合の処理
@@ -190,10 +190,8 @@ class State:
             self.last_applied += 1
             entry = self.logs[self.last_applied]
             
-            # ステートマシンにコマンドを適用
-            for key, value in entry.items():
-                self.statemachine[key] = value
-        logger.info(f"{self.node.name} applied log {self.last_applied}")
+            self.statemachine[entry['command']['key']] = entry['command']['value']
+        # logger.info(f"{self.node.name} applied log {self.last_applied}")
 
     async def become_leader(self):
         """リーダーになった時の初期化処理"""
@@ -201,6 +199,7 @@ class State:
             return
         
         self.state = 'leader'
+        self.leader_id = self.node.name
         logger.info(f"{self.node.name} became leader for term {self.current_term}")
         
         # リーダー状態の初期化
@@ -255,7 +254,7 @@ class State:
         if vote_granted:
             logger.info(f"{self.node.name} voted for {message['candidate_id']} in term {self.current_term}")
         else:
-            logger.info(f"{self.node.name} rejected vote for {message['candidate_id']} in term {self.current_term}")
+            logger.info(f"{self.node.name} rejected vote for {message['candidate_id']} in term {self.current_term} ({message})")
         
         # 投票結果を返信
         response = {
@@ -269,6 +268,8 @@ class State:
     async def handle_append_entries(self, message):
         """AppendEntriesリクエストを処理する"""
         success = False
+
+        self.leader_id = message['leader_id']
         
         # 1. リーダーのタームが現在のターム以上であることを確認
         if message['term'] >= self.current_term:
@@ -286,7 +287,7 @@ class State:
                 success = True
                 # 新しいエントリがある場合は追加
                 if message['entries']:
-                    logger.info(f"{self.node.name} received {len(message['entries'])} new log entries from leader (commit_index: {message['leader_commit']})")
+                    # logger.info(f"{self.node.name} received {len(message['entries'])} new log entries from leader (commit_index: {message['leader_commit']})")
                     # 競合するエントリを削除し、新しいエントリを追加
                     self.logs = self.logs[:message['prev_log_index'] + 1]
                     self.logs.extend(message['entries'])
@@ -312,6 +313,7 @@ class State:
             
         sender = message['sender']
         success = message['success']
+
         
         if success:
             # 成功した場合、next_indexとmatch_indexを更新
@@ -330,14 +332,15 @@ class State:
         """クライアントからのWrite要求を処理する"""
         client_id = message.get('sender')
         request_id = message.get('request_id', str(uuid.uuid4()))
-        logger.info(f"{self.node.name} received write request: {message}")
+        # logger.info(f"{self.node.name} received write request: {message}")
         if self.state != 'leader':
             # リーダーでない場合は、リーダーの情報をクライアントに返す
             response = {
                 'type': 'ClientWriteResponse',
                 'success': False,
                 'error': 'not_leader',
-                'leader_hint': self.voted_for  # 既知のリーダー情報
+                'leader_hint': self.leader_id,  # 既知のリーダー情報
+                "request_id": request_id
             }
             client = next(c for c in self.node.clients if c.name == client_id)
             await client.send(response)
@@ -394,4 +397,4 @@ class State:
                     await client.send(response)
                     del self.pending_requests[request_id]
                 
-                logger.info(f"{self.node.name} committed logs up to index {self.commit_index}")
+                # logger.info(f"{self.node.name} committed logs up to index {self.commit_index}")
