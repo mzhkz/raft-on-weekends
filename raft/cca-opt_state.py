@@ -286,7 +286,7 @@ class State:
                     self.logs = self.logs[:message['prev_log_index'] + 1]
                     self.logs.extend(message['entries'])
 
-                    # バケットが存在するか
+                    # バケットが存在するか確かめる。なければ、バケットが作成されるまで待つ
                     for entry in message['entries']:
                         bucket_id = entry['command']['bucket_id']
                         # バケットが存在しない場合は、バケットが作成されるまで待つ
@@ -353,27 +353,19 @@ class State:
             await client.send(response)
             return
         
-        bucket = self.share_buckets.get(request_id)
-        # バケットが存在しない場合は、バケットが作成されるまで待つ
-        if not bucket:
-            self.bucket_events[request_id] = asyncio.Event()
-            try:
-                # バケットが作成されるまで待つ
-                await asyncio.wait_for(self.bucket_events[request_id].wait(), timeout=1.0)  
-                # バケットが作成されたら、バケットを取得
-                bucket = self.share_buckets[request_id]
-            except asyncio.TimeoutError:
-                response = {
-                    'type': 'ClientWriteResponse',
-                    'success': False,
-                    'error': 'timeout_waiting_bucket',
-                    "request_id": request_id
-                }
-                client = next(c for c in self.node.clients if c.name == client_id)
-                await client.send(response)
-            finally:
-                del self.bucket_events[request_id]
-        
+
+        # writeShareと統合する
+        shares = message.get('shares')
+        bucket_id = request_id # バケットIDはリクエストIDと同じ
+        bucket = {
+            'shares': shares,
+            'request_id': request_id,
+            'bucket_id': bucket_id,
+            'term': self.current_term,
+        }
+
+        self.share_buckets[bucket_id] = bucket
+
         # 新しいログエントリを作成
         entry = {
             'term': self.current_term,
@@ -385,7 +377,6 @@ class State:
             },
             "request_id": request_id
         }
-        
         
         # リクエストを追跡するためにIDを保存
         if request_id:
@@ -415,8 +406,7 @@ class State:
         }
         self.share_buckets[bucket_id] = bucket
 
-        # バケットが作成されたら、バケットを取得
-        # もしtimeoutしていたら、bucketはガベージコレクションされる。
+        # バケット待ちがあれば、取得できたことを通知 (おもにFollowerだったときにAppendEntriesが先に来て、クライアントからのWriteShareが来るときに、バケットが作成されるまで待つ)
         if self.bucket_events.get(bucket_id):
             self.bucket_events[bucket_id].set()
 

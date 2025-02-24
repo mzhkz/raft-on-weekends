@@ -331,7 +331,7 @@ class State:
             return
         
         # ValueをVSSで分割
-        shares = split(message['value'], len(self.node.cluster), int(len(self.node.cluster) / 2) + 1, 2**16, 2**16, 2).get('D')
+        (shares, _) = split(message['value'], len(self.node.cluster), int(len(self.node.cluster) / 2) + 1, 2**16, 2**16, 2)
         # 新しいログエントリを作成
         entry = {
             'term': self.current_term,
