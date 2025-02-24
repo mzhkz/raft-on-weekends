@@ -1,20 +1,21 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_FLOOR
 import random
 
-def fast_pow_mod(base, exponent, modulus):
-    """高速な冪剗余演算"""
+def fast_pow_mod(base: Decimal, exponent: Decimal, modulus: Decimal) -> Decimal:
+    """高速な冪剰余演算"""
     result = Decimal(1)
-    base = Decimal(base) % modulus
-    exponent = int(exponent)  # Decimalのまま使うと遅くなるため
+    base = base % modulus
     
     while exponent > 0:
-        if exponent & 1:
-            result = (result * base) % modulus
-        base = (base * base) % modulus
-        exponent >>= 1
+        if int(exponent) & 1:  # Decimal型を整数に変換してビット演算
+            # 大きな数値の掛け算を文字列経由で処理
+            result = Decimal(str(int(result) * int(base) % int(modulus)))
+        # 同様に base の計算も修正
+        base = Decimal(str(int(base) * int(base) % int(modulus)))
+        exponent = Decimal(int(exponent) // 2)  # exponentを整数に変換して割り算
     return result
 
-def divmod(a, b, n):
+def divmod(a: Decimal, b: Decimal, n: Decimal) -> Decimal:
     """モジュラ逆数を計算"""
     t, newt = Decimal(0), Decimal(1)
     r, newr = n, b % n
@@ -30,19 +31,22 @@ def divmod(a, b, n):
         t = t + n
     return (a * t) % n
 
-def polynomial(x, a, q):
+def polynomial(x: Decimal, a: list, q: Decimal) -> Decimal:
     """多項式の計算"""
     value = Decimal(a[0])
     for i in range(1, len(a)):
-        value = (value + fast_pow_mod(x, i, q) * a[i]) % q
+        value = (value + fast_pow_mod(x, Decimal(i), q) * a[i]) % q
     return value
 
-def split(secret, n, k, p, q, generator):
+def split(secret: str, n: int, k: int, p: Decimal, q: Decimal, generator: Decimal) -> dict:
     """秘密を分散"""
-    if not isinstance(secret, str) or not secret.startswith('0x'):
-        raise TypeError("secret must be a hex string starting with 0x")
+    # ASCII文字列を16進数に変換してからDecimalに変換
+    try:
+        hex_value = ''.join(hex(ord(c))[2:].zfill(2) for c in secret)
+        S = Decimal(int(hex_value, 16))
+    except ValueError:
+        raise ValueError("Failed to convert secret to decimal")
     
-    S = Decimal(int(secret, 16))
     g = Decimal(generator)
     p = Decimal(p)
     q = Decimal(q)
@@ -57,6 +61,7 @@ def split(secret, n, k, p, q, generator):
     
     # ランダム係数の生成
     for i in range(1, k):
+        # 1からq-1の範囲でランダムな係数を生成
         coeff = Decimal(random.randrange(1, int(q)))
         a.append(coeff)
         C.append({
@@ -66,38 +71,56 @@ def split(secret, n, k, p, q, generator):
     
     # シェアの生成
     for i in range(n):
-        x = Decimal(i + 1)
+        x = str(i + 1)
         D.append({
             'x': x,
-            'y': polynomial(x, a, q)
+            'y': str(polynomial(x, a, q))
         })
     
     return {'D': D, 'C': C}
 
-def lagrange_basis(data, j, q):
+def lagrange_basis(data: list, j: int, q: Decimal) -> dict:
     """ラグランジュ基底多項式の計算"""
     denominator = Decimal(1)
     numerator = Decimal(1)
     
     for i in range(len(data)):
         if data[j]['x'] != data[i]['x']:
-            denominator = (denominator * (data[i]['x'] - data[j]['x'])) % q
-            numerator = (numerator * data[i]['x']) % q
+            # 文字列として保存されているx値をDecimalに変換
+            x_i = Decimal(data[i]['x'])
+            x_j = Decimal(data[j]['x'])
+            denominator = (denominator * (x_i - x_j)) % q
+            numerator = (numerator * x_i) % q
     
     return {'numerator': numerator, 'denominator': denominator}
 
-def combine(shares, prime):
+def combine(shares: list, prime: Decimal) -> str:
     """シェアの結合"""
     S = Decimal(0)
     
     for i in range(len(shares)):
         basis = lagrange_basis(shares, i, prime)
-        S = (S + shares[i]['y'] * divmod(basis['numerator'], 
+        # 文字列として保存されているy値をDecimalに変換
+        y_value = Decimal(shares[i]['y'])
+        S = (S + y_value * divmod(basis['numerator'], 
              basis['denominator'], prime)) % prime
     
-    return S
+    # Decimalから16進数文字列に変換
+    hex_str = hex(int(S))[2:]
+    # 16進数文字列が奇数の長さの場合、先頭に0を追加
+    if len(hex_str) % 2 != 0:
+        hex_str = '0' + hex_str
+    
+    # 16進数文字列をASCII文字列に変換
+    try:
+        result = ''
+        for i in range(0, len(hex_str), 2):
+            result += chr(int(hex_str[i:i+2], 16))
+        return result
+    except ValueError:
+        raise ValueError("Failed to convert decimal to string")
 
-def verify(share, C, prime, generator):
+def verify(share: dict, C: list, prime: Decimal, generator: Decimal) -> bool:
     """シェアの検証"""
     p = Decimal(prime)
     g = Decimal(generator)
@@ -105,7 +128,7 @@ def verify(share, C, prime, generator):
     rG = Decimal(1)
     
     for i, commitment in enumerate(C):
-        e = fast_pow_mod(share['x'], i, p)
+        e = fast_pow_mod(share['x'], Decimal(i), p)
         basis = fast_pow_mod(commitment['c'], e, p)
         rG = (rG * basis) % p
     

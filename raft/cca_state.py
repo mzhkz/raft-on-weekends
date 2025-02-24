@@ -40,6 +40,8 @@ class CCAState:
 
         self.garbage_collection_timer = None
 
+        logger.info(f"CCAState {self.node.name} initialized")
+
 
 
     def init_timers(self):

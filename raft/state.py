@@ -33,6 +33,8 @@ class State:
         # クライアントのWrite要求を追跡するための辞書
         self.pending_requests = {}
 
+        logger.info(f"State {self.node.name} initialized")
+
 
 
     def init_timers(self):

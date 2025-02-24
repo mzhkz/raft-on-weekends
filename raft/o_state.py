@@ -3,7 +3,7 @@ import uuid
 import random
 from .logger import logger
 from .timer import Timer
-from crypto.VSS import split, verify
+from crypto.VSS import split, combine
 from crypto.parameters import KEY_2048_PARAMS
 
 class OState:
@@ -35,6 +35,8 @@ class OState:
         
         # クライアントのWrite要求を追跡するための辞書
         self.pending_requests = {}
+
+        logger.info(f"OState {self.node.name} initialized")
 
 
 
@@ -152,11 +154,24 @@ class OState:
         
         next_idx = self.next_index[node_name]
         entries = self.logs[next_idx:]
+        new_entries = []
 
         # 信頼できないノードにはシェア全体を送信しない
         for entry in entries:
-            share = entry['command'].get('value')[target_node_id - 1] # リーダーのvalueにはフルシェアが保存されているので、そこから分配
-            entry['command']['value'] = [share]
+            logger.info(f"VSSで分割したシェア: {entry['command'].get('value')}")
+            share = entry['command'].get('value')[target_node_id - 1] # リーダーのvalueにはフルシェアが保存されているので、そこから分配されたシェアを取得
+
+            
+            # シェアをコピーして新しいエントリを作成
+            new_entry = {
+                'term': entry['term'],
+                'command': {
+                    'type': entry['command']['type'],
+                    'key': entry['command']['key'],
+                    'value': [share]
+                }
+            }
+            new_entries.append(new_entry)
         
         request = {
             'type': 'AppendEntries',
@@ -164,7 +179,7 @@ class OState:
             'leader_id': self.node.name,
             'prev_log_index': next_idx - 1,
             'prev_log_term': self.logs[next_idx - 1]['term'] if next_idx > 0 else 0,
-            'entries': entries,
+            'entries': new_entries,
             'leader_commit': self.commit_index
         }
         
@@ -334,8 +349,14 @@ class OState:
             await client.send(response)
             return
         
-        value = self.statemachine.get(key)
-        # バケットが存在する場合は、シェアを返す
+        shares = self.statemachine.get(key)
+
+        # リーダーは信頼できるので、シェアを組み合わせて元の値を取得
+        if self.state == 'leader':
+            value = combine(shares, KEY_2048_PARAMS['p'])
+        else:
+            value = shares
+        
         response = {
             'type': 'ClientReadResponse',
             'success': True,
@@ -365,7 +386,7 @@ class OState:
             return
         
         # ValueをVSSで分割
-        (shares, _) = split(message['value'], len(self.node.cluster), int(len(self.node.cluster) / 2) + 1, KEY_2048_PARAMS['p'], KEY_2048_PARAMS['q'], KEY_2048_PARAMS['g'])
+        shares = split(message['value'], len(self.node.cluster), int(len(self.node.cluster) / 2) + 1, KEY_2048_PARAMS['p'], KEY_2048_PARAMS['q'], KEY_2048_PARAMS['g'])['D']
         # 新しいログエントリを作成
         entry = {
             'term': self.current_term,

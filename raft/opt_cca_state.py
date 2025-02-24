@@ -3,6 +3,8 @@ from .logger import logger
 import random
 from .timer import Timer
 import uuid
+
+
 class OptCCAState:
     """基本的にはここに必要なメソッドや変数を追加していく"""
     
@@ -39,6 +41,8 @@ class OptCCAState:
         self.read_locks = {} # 読み込みロックを保存する辞書
 
         self.garbage_collection_timer = None
+
+        logger.info(f"OptCCAState {self.node.name} initialized")
 
 
 

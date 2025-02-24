@@ -12,7 +12,7 @@ from crypto.parameters import KEY_2048_PARAMS
 
 from client.network import ClientUDPProtocol
 
-class PerformanceEvaluator:
+class CCAPerformanceEvaluator:
     def __init__(self, name):
         self.name = name
         self.commit_events = {}
@@ -28,15 +28,16 @@ class PerformanceEvaluator:
         self.total_requests = 0
         self.successful_requests = 0
         self.total_latency = 0
-        self.start_time = None  
+        self.start_time = None
         
         self.load_node_portlist()
         
         self.stats_timer = Timer(2, self.report_stats)  # 10秒間隔でパフォーマンス統計を報告
 
-
         # cca client用の変数
         self.granted_share_events = {}
+
+        logger.info(f"CCAPerformanceEvaluator {self.name} initialized")
         
     def load_node_portlist(self):
         with open('node_portlist.json', 'r') as file:
@@ -77,7 +78,10 @@ class PerformanceEvaluator:
 
     def handle_write_share_response(self, response):
         """シェアを受け取った時の処理"""
-        pass
+        request_id = response.get('request_id')
+        if self.share_granted > len(self.cluster_info.keys()) // 2:
+            if request_id in self.granted_share_events:
+                self.granted_share_events[request_id].set()
 
     def handle_get_share_response(self, response):
         """シェアを受け取った時の処理"""
@@ -141,14 +145,19 @@ class PerformanceEvaluator:
         # シェアをレプリケーション  
         (shares, commitment) = split(value, node_count, node_count, KEY_2048_PARAMS['p'], KEY_2048_PARAMS['q'], KEY_2048_PARAMS['g'])
 
+        self.granted_share_events[request_id] = asyncio.Event()
+
         for node_name in self.cluster_info.keys():
-            if node_name != self.current_leader:
-                request = {
-                    'type': 'ClientWriteShare',
-                    'shares': shares[0:node_count-1], ## 擬似的なシェア分配
-                    'request_id': request_id,
-                }
-                await self.send_request(request, node_name)
+            request = {
+                'type': 'ClientWriteShare',
+                'shares': shares[0:node_count-1], ## 擬似的なシェア分配
+                'request_id': request_id,
+            }
+            await self.send_request({"data": request}, node_name)
+
+        # シェアが揃ったら、コミットを実行
+        await asyncio.wait_for(self.granted_share_events[request_id].wait(), timeout=5.0)
+        del self.granted_share_events[request_id]
         
         self.commit_events[request_id] = asyncio.Event()
         
@@ -156,7 +165,6 @@ class PerformanceEvaluator:
             'type': 'ClientWrite',
             'key': key,
             'value': commitment,
-            'shares': shares[0:node_count-1],## 擬似的なシェア分配
             'request_id': request_id,
         }
         
@@ -210,19 +218,10 @@ class PerformanceEvaluator:
         try:
             while True:
                 try:
-                    value = 892 
-                    await self.write('random_number', value)
+                    value = "keiosfc"
+                    await self.write('token', value)
                 except Exception as e:
                     logger.error(f"エラーが発生しました: {e}")
         finally:
             self.stats_timer.stop()  # 統計タイマーを停止
             self.transport.close()
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--name', default='client1')
-    args = parser.parse_args()
-
-    client = PerformanceEvaluator(args.name)
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(client.run())

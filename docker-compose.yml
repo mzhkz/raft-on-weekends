@@ -14,6 +14,8 @@ services:
     - client.run_client
     - --name
     - client1
+    - --client
+    - default
     container_name: client1
     depends_on:
       node3:
@@ -37,6 +39,8 @@ services:
     - node1
     - --clients
     - client1
+    - --state
+    - default
     container_name: node1
     environment:
     - NODE=node1
@@ -61,6 +65,8 @@ services:
     - node2
     - --clients
     - client1
+    - --state
+    - default
     container_name: node2
     environment:
     - NODE=node2
@@ -85,6 +91,8 @@ services:
     - node3
     - --clients
     - client1
+    - --state
+    - default
     container_name: node3
     environment:
     - NODE=node3

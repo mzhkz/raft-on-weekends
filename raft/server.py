@@ -2,20 +2,36 @@ import asyncio
 import json
 from .network import NodeUDPProtocol, ClientUDPProtocol
 from .logger import logger
-from .state import State
 
+from raft.state import State
+from raft.o_state import OState
+from raft.cca_state import CCAState
+from raft.opt_cca_state import OptCCAState
 
-async def register_as_server_node(names, loop):
+def getStateClass(name):
+    """ 指定された名前に基づいて適切なステートクラスを返す """
+    if name == 'o':
+        return OState
+    elif name == 'cca':
+        return CCAState
+    elif name == 'opt_cca':
+        return OptCCAState
+    elif name == 'default':
+        return State
+    else:
+        raise ValueError(f"Invalid state name: {name}")
+
+async def register_as_server_node(names, loop, state_name):
     for name in names:
         if name not in Node.cluster:
-            node = Node(name, loop, is_myself=True)
+            node = Node(name, loop, is_myself=True, state_name=state_name)
             logger.info("Starting {} as a node server".format(name))
             await node.start()
 
-async def register_as_client_node(names, loop):
+async def register_as_client_node(names, loop, state_name):
     for name in names:
         if name not in Node.cluster:
-            node = Node(name, loop, is_myself=False)
+            node = Node(name, loop, is_myself=False, state_name=state_name)
             logger.info("Starting {} as a node client".format(name))
             await node.start()
 
@@ -84,9 +100,9 @@ class BaseNode:
 class Node(BaseNode):
 
 
-    def __init__(self, name, loop, is_myself=False):
+    def __init__(self, name, loop, state_name, is_myself=False,):
         super().__init__(name, loop, is_myself)
-        self.state = State(self) if is_myself else None
+        self.state = getStateClass(state_name)(self) if is_myself else None
         self.__class__.cluster.append(self)
 
 

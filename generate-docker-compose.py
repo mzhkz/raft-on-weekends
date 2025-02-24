@@ -2,7 +2,7 @@ import sys
 import yaml
 import json
 
-def generate_docker_compose(num_nodes, client_nums):
+def generate_docker_compose(num_nodes, client_nums, state_name):
     services = {}
     network_name = 'raft-common-network'
     
@@ -27,7 +27,7 @@ def generate_docker_compose(num_nodes, client_nums):
                 f'CLIENTS={clients}'
             ],
             'ports': [f'{host_port}:8080/udp'],
-            'command': ["python", "-m", "raft.run_node", "--node", ipv4_address, "--cluster", cluster, "--name", node_name, "--clients", clients],
+            'command': ["python", "-m", "raft.run_node", "--node", ipv4_address, "--cluster", cluster, "--name", node_name, "--clients", clients, "--state", state_name],
             'networks': {
                 network_name: {
                     'ipv4_address': ipv4_address
@@ -47,7 +47,7 @@ def generate_docker_compose(num_nodes, client_nums):
         services[client_name] = {
             'build': '.',
             'container_name': client_name,
-            'command': ["python", "-m", "client.run_client", "--name", client_name],
+            'command': ["python", "-m", "client.run_client", "--name", client_name, "--client", state_name],
             'ports': [f'{host_port}:8888/udp'],
             'networks': {
                 network_name: {
@@ -93,8 +93,8 @@ def generate_docker_compose(num_nodes, client_nums):
     print(f'node_portlist.json with {num_nodes} nodes and {num_clients} clients generated successfully.')
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        print("Usage: python generate_docker_compose.py <number_of_nodes (< 254)> <number_of_clients (< 254)>")
+    if len(sys.argv) != 4:
+        print("Usage: python generate_docker_compose.py <number_of_nodes (< 254)> <number_of_clients (< 254)> <state_name>")
         sys.exit(1)
 
     try:
@@ -104,7 +104,8 @@ if __name__ == '__main__':
         num_clients = int(sys.argv[2])
         if num_clients < 1 or num_clients > 253:
             raise ValueError
-        generate_docker_compose(num_nodes, num_clients)
+        state_name = sys.argv[3]
+        generate_docker_compose(num_nodes, num_clients, state_name)
     except ValueError:
         print("Please provide a valid integer for the number of nodes (< 254) and clients (< 254).")
         sys.exit(1)

@@ -10,6 +10,7 @@ if __name__ == '__main__':
     parser.add_argument('--cluster')
     parser.add_argument('--clients')
     parser.add_argument('--name')
+    parser.add_argument('--state')
     args = parser.parse_args()
 
     # 自分のノードのアドレス
@@ -21,7 +22,7 @@ if __name__ == '__main__':
 
     loop = asyncio.get_event_loop()
     setup() # ノードのポートリストを読み込む
-    loop.create_task(register_as_server_node(names=[name], loop=loop))
-    loop.create_task(register_as_client_node(names=args.cluster.split(','), loop=loop))
+    loop.create_task(register_as_server_node(names=[name], loop=loop, state_name=args.state))
+    loop.create_task(register_as_client_node(names=args.cluster.split(','), loop=loop, state_name=args.state))
     loop.create_task(register_as_raft_client(names=args.clients.split(','), loop=loop))
     loop.run_forever()
