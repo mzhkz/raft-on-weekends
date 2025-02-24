@@ -3,8 +3,8 @@ import uuid
 import random
 from .logger import logger
 from .timer import Timer
-
 from crypto.VSS import split, verify
+from crypto.parameters import KEY_2048_PARAMS
 
 class State:
     """基本的にはここに必要なメソッドや変数を追加していく"""
@@ -365,7 +365,7 @@ class State:
             return
         
         # ValueをVSSで分割
-        (shares, _) = split(message['value'], len(self.node.cluster), int(len(self.node.cluster) / 2) + 1, 2**16, 2**16, 2)
+        (shares, _) = split(message['value'], len(self.node.cluster), int(len(self.node.cluster) / 2) + 1, KEY_2048_PARAMS['p'], KEY_2048_PARAMS['q'], KEY_2048_PARAMS['g'])
         # 新しいログエントリを作成
         entry = {
             'term': self.current_term,

@@ -8,6 +8,7 @@ from raft.logger import logger  # Raftのロガーをインポート
 from raft.timer import Timer
 
 from crypto.VSS import split, combine
+from crypto.parameters import KEY_1024_PARAMS, KEY_2048_PARAMS, KEY_3072_PARAMS, KEY_4096_PARAMS
 
 class PerformanceEvaluator:
     def __init__(self, name):
@@ -127,7 +128,7 @@ class PerformanceEvaluator:
             return None
         finally:
             del self.read_events[request_id]
-            result = self.read_results[request_id]
+            result = combine(self.read_results[request_id], KEY_2048_PARAMS['p'])
             del self.read_results[request_id]
 
         return result
@@ -139,7 +140,7 @@ class PerformanceEvaluator:
         node_count = len(self.cluster_info.keys())
 
         # シェアをレプリケーション  
-        (shares, commitment) = split(value, node_count, node_count, 2, 2, 2)
+        (shares, commitment) = split(value, node_count, node_count, KEY_2048_PARAMS['p'], KEY_2048_PARAMS['q'], KEY_2048_PARAMS['g'])
 
         for node_name in self.cluster_info.keys():
             if node_name != self.current_leader:
