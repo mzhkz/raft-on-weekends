@@ -8,7 +8,7 @@ from raft.logger import logger  # Raftのロガーをインポート
 from raft.timer import Timer
 
 from crypto.VSS import split, combine
-from crypto.parameters import KEY_1024_PARAMS, KEY_2048_PARAMS, KEY_3072_PARAMS, KEY_4096_PARAMS
+from crypto.parameters import KEY_2048_PARAMS
 
 class PerformanceEvaluator:
     def __init__(self, name):
@@ -128,7 +128,7 @@ class PerformanceEvaluator:
             return None
         finally:
             del self.read_events[request_id]
-            result = combine(self.read_results[request_id], KEY_2048_PARAMS['p'])
+            result = combine(self.read_results[request_id], KEY_2048_PARAMS['p']) # シェアを結合
             del self.read_results[request_id]
 
         return result
