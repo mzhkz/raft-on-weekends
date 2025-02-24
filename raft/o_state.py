@@ -152,7 +152,7 @@ class State:
 
         # 信頼できないノードにはシェア全体を送信しない
         for entry in entries:
-            share = entry['command'].get('value')[target_node_id - 1]
+            share = entry['command'].get('value')[target_node_id - 1] # リーダーのvalueにはフルシェアが保存されているので、そこから分配
             entry['command']['value'] = [share]
         
         request = {

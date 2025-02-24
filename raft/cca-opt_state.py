@@ -462,7 +462,8 @@ class State:
             for match_idx in self.match_index.values():
                 if match_idx >= n:
                     replicated += 1
-                    
+            
+            # 過半数のノードがコミットしたら、コミットする
             if replicated > len(self.node.cluster) // 2:
                 self.commit_index = n
                 await self.apply_logs()

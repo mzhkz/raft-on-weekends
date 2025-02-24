@@ -25,7 +25,7 @@ class PerformanceEvaluator:
         
         self.load_node_portlist()
         
-        self.stats_timer = Timer(10, self.report_stats)  # 10秒間隔でパフォーマンス統計を報告
+        self.stats_timer = Timer(2, self.report_stats)  # 10秒間隔でパフォーマンス統計を報告
         
     def load_node_portlist(self):
         with open('node_portlist.json', 'r') as file:
@@ -143,7 +143,7 @@ class ClientUDPProtocol(asyncio.DatagramProtocol):
     def _convert_addrs_to_node(self):
         for key, value in self.base_node.node_host_port.items():
             self.address_to_node[value['host']] = key
-            
+
     def connection_made(self, transport):
         self.transport = transport
 
