@@ -25,14 +25,14 @@ async def register_as_server_node(names, loop, state_name):
     for name in names:
         if name not in Node.cluster:
             node = Node(name, loop, is_myself=True, state_name=state_name)
-            logger.info("Starting {} as a node server".format(name))
+            # logger.info("Starting {} as a node server".format(name))
             await node.start()
 
 async def register_as_client_node(names, loop, state_name):
     for name in names:
         if name not in Node.cluster:
             node = Node(name, loop, is_myself=False, state_name=state_name)
-            logger.info("Starting {} as a node client".format(name))
+            # logger.info("Starting {} as a node client".format(name))
             await node.start()
 
 
@@ -40,7 +40,7 @@ async def register_as_raft_client(names, loop):
     for name in names:
         if name not in Client.clients:
             client = Client(name, loop)
-            logger.info("Starting {} as a raft client".format(name))
+            # logger.info("Starting {} as a raft client".format(name))
             await client.start()
 
 
@@ -115,12 +115,12 @@ class Node(BaseNode):
             self.transport, _ = await asyncio.Task(
                 self.loop.create_datagram_endpoint(protocol, remote_addr=address),
                 loop=self.loop)
-            logger.info("Connecting to {}:{}".format(address[0], address[1]))
+            # logger.info("Connecting to {}:{}".format(address[0], address[1]))
         else:
             self.transport, _ = await asyncio.Task(
                 self.loop.create_datagram_endpoint(protocol, local_addr=address),
                 loop=self.loop)
-            logger.info("Listeing on {}:{}".format(address[0], address[1]))
+            # logger.info("Listeing on {}:{}".format(address[0], address[1]))
 
             # Start the state machine
             self.loop.create_task(self.state.start())
@@ -142,7 +142,7 @@ class Client(BaseNode):
         self.transport, _ = await asyncio.Task(
                 self.loop.create_datagram_endpoint(protocol, remote_addr=address),
                 loop=self.loop)
-        logger.info("Connecting on {}:{}".format(address[0], address[1]))
+        # logger.info("Connecting on {}:{}".format(address[0], address[1]))
 
     
     @staticmethod

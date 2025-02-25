@@ -297,6 +297,7 @@ class OptCCAState:
 
                     # バケットが存在するか
                     for entry in message['entries']:
+                        # フォロワーに読み込みロックをかける
                         self.read_locks[entry['command']['key']] = asyncio.Event()
                         bucket_id = entry['command']['bucket_id']
                         # バケットが存在しない場合は、バケットが作成されるまで待つ
