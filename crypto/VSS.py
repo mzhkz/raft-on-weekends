@@ -1,11 +1,4 @@
 import random
-from parameters import KEY_1024_PARAMS
-
-KEY_1024_PARAMS = {
-    "p": int(KEY_1024_PARAMS["p"]),
-    "q": int(KEY_1024_PARAMS["q"]),
-    "g": int(KEY_1024_PARAMS["g"])
-}
 
 def extended_gcd(a, b):
     """
@@ -157,18 +150,18 @@ def verify(share, commitments, prime, generator, q):
     return left == right
 
 if __name__ == "__main__":
-    from parameters import KEY_1024_PARAMS
+    from parameters import KEY_2048_PARAMS
 
     # パラメータを整数に変換
-    MODULUS_P = int(KEY_1024_PARAMS["p"])
-    MODULUS_Q = int(KEY_1024_PARAMS["q"])
-    GENERATOR = int(KEY_1024_PARAMS["g"])
+    MODULUS_P = int(KEY_2048_PARAMS["p"])
+    MODULUS_Q = int(KEY_2048_PARAMS["q"])
+    GENERATOR = int(KEY_2048_PARAMS["g"])
     
     TOTAL_SHARES = 5
     THRESHOLD = 3
     
     print("\n=== 秘密分散テスト ===")
-    secret = "hello sfc!"  # テスト用の秘密
+    secret = "hello sfc! student~!!!"  # テスト用の秘密
     secret_int = int(secret.encode('ascii').hex(), 16)
     print(f"元の秘密: {secret_int}")
     
