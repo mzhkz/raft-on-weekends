@@ -298,7 +298,6 @@ class CCAState:
                     # バケットが存在するか
                     for entry in message['entries']:
                         self.read_locks[entry['command']['key']] = asyncio.Event()
-                        logger.info(f"read lock: {entry['command']['key']}")
                         bucket_id = entry['command']['bucket_id']
                         # バケットが存在しない場合は、バケットが作成されるまで待つ
                         if bucket_id not in self.share_buckets:
@@ -350,7 +349,6 @@ class CCAState:
         """クライアントからのWrite要求を処理する"""
         client_id = message.get('sender')
         request_id = message.get('request_id', str(uuid.uuid4()))
-        # logger.info(f"{self.node.name} received write request: {message}")
         if self.state != 'leader':
             # リーダーでない場合は、リーダーの情報をクライアントに返す
             response = {
@@ -407,7 +405,6 @@ class CCAState:
 
         # 書き込むキーへの読み込みをロック
         self.read_locks[message['key']] = asyncio.Event()
-        logger.info(f"read lock: {message['key']}")
         
         # 全フォロワーにログを複製
         for node in self.node.cluster:
@@ -419,9 +416,6 @@ class CCAState:
         """クライアントからのWrite要求を処理する"""
         client_id = message.get('sender')
         request_id = message.get('request_id', str(uuid.uuid4()))
-
-        logger.info(f"write share: {message}")
-
         shares = message.get('shares')
         bucket_id = request_id # バケットIDはリクエストIDと同じ
         bucket = {

@@ -55,7 +55,6 @@ class CCAPerformanceEvaluator:
         )
 
     def handle_response(self, response):
-        logger.info(f"response: {response}")
         request_id = response.get('request_id')
         response_type = response.get('type')
         if response_type == 'ClientWriteResponse':
@@ -138,8 +137,6 @@ class CCAPerformanceEvaluator:
             for share in self.read_results[request_id]:
                 if share not in unique_shares:
                     unique_shares.append(share)
-
-            logger.info(f"unique_shares: {unique_shares}")
 
             result = combine(unique_shares, TEST_PARAMS['q']) # シェアを結合
             del self.read_results[request_id]
