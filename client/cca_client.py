@@ -8,7 +8,7 @@ from raft.logger import logger  # Raftのロガーをインポート
 from raft.timer import Timer
 
 from crypto.VSS import split, combine
-from crypto.parameters import KEY_2048_PARAMS
+from crypto.parameters import TEST_PARAMS
 
 from client.network import ClientUDPProtocol
 
@@ -131,7 +131,7 @@ class CCAPerformanceEvaluator:
             return None
         finally:
             del self.read_events[request_id]
-            result = combine(self.read_results[request_id], KEY_2048_PARAMS['p']) # シェアを結合
+            result = combine(self.read_results[request_id], TEST_PARAMS['q']) # シェアを結合
             del self.read_results[request_id]
 
         return result
@@ -143,7 +143,7 @@ class CCAPerformanceEvaluator:
         node_count = len(self.cluster_info.keys())
 
         # シェアをレプリケーション  
-        (shares, commitment) = split(value, node_count, node_count, KEY_2048_PARAMS['p'], KEY_2048_PARAMS['q'], KEY_2048_PARAMS['g'])
+        (shares, commitment) = split(value, node_count, node_count, TEST_PARAMS['p'], TEST_PARAMS['q'], TEST_PARAMS['g'])
 
         self.granted_share_events[request_id] = asyncio.Event()
 
@@ -218,10 +218,11 @@ class CCAPerformanceEvaluator:
         try:
             while True:
                 try:
-                    value = "keiosfc"
+                    value = 23
                     await self.write('token', value)
                 except Exception as e:
-                    logger.error(f"エラーが発生しました: {e}")
+                    logger.error(e)
+                    await asyncio.sleep(1)
         finally:
             self.stats_timer.stop()  # 統計タイマーを停止
             self.transport.close()

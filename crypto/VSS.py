@@ -64,10 +64,10 @@ def split(secret, total_shares, threshold, modulus_p, modulus_q, generator):
       generator: コミットメント生成用の生成元 g
     """
     # 秘密を整数に変換
-    if isinstance(secret, str) and secret.startswith("0x"):
-        secret_int = int(secret, 16)
+    if isinstance(secret, int):
+        secret_int = secret
     else:
-        secret_int = int(secret)
+        raise ValueError(f"秘密 {secret} は整数ではありません")
     
     if secret_int >= modulus_q:
         raise ValueError(f"秘密 {secret_int} は modulus_q {modulus_q} 未満である必要があります")
@@ -116,20 +116,16 @@ def lagrange_interpolate(data, q):
         secret = (secret + term) % q
     return secret
 
-def combine(shares, modulus_q, return_string=True):
+def combine(shares, modulus_q):
     """
     シェアから秘密を復元します。
     
     Parameters:
       shares: シェアのリスト（各シェアは {'x': int, 'y': int} の形式）
       modulus_q: 秘密分散に用いた素数
-      return_string: True の場合は文字列として、False の場合は整数として返します。
     """
     recovered_secret = lagrange_interpolate(shares, modulus_q)
-    if return_string:
-        return str(recovered_secret)
-    else:
-        return recovered_secret
+    return recovered_secret
 
 def verify(share, commitments, prime, generator, q):
     """
@@ -150,19 +146,18 @@ def verify(share, commitments, prime, generator, q):
     return left == right
 
 if __name__ == "__main__":
-    from parameters import KEY_2048_PARAMS
+    from parameters import TEST_PARAMS  
 
     # パラメータを整数に変換
-    MODULUS_P = int(KEY_2048_PARAMS["p"])
-    MODULUS_Q = int(KEY_2048_PARAMS["q"])
-    GENERATOR = int(KEY_2048_PARAMS["g"])
+    MODULUS_P = int(TEST_PARAMS["p"])
+    MODULUS_Q = int(TEST_PARAMS["q"])
+    GENERATOR = int(TEST_PARAMS["g"])
     
     TOTAL_SHARES = 5
     THRESHOLD = 3
     
     print("\n=== 秘密分散テスト ===")
-    secret = "hello sfc! student~!!!"  # テスト用の秘密
-    secret_int = int(secret.encode('ascii').hex(), 16)
+    secret_int = 23
     print(f"元の秘密: {secret_int}")
     
     # 秘密を分散
@@ -180,15 +175,15 @@ if __name__ == "__main__":
     
     # 最初の threshold 個のシェアから秘密を復元
     test_shares = shares[:THRESHOLD]
-    recovered_secret = combine(test_shares, MODULUS_Q, return_string=True)
+    recovered_secret = combine(test_shares, MODULUS_Q)
     print(f"\n最初の{THRESHOLD}個のシェアから復元した秘密: {recovered_secret}")
-    print(f"元の秘密と一致: {int(recovered_secret) == secret_int}")
+    print(f"元の秘密と一致: {recovered_secret == secret_int}")
     
     # 別の threshold 個のシェアから秘密を復元
     test_shares2 = [shares[0], shares[2], shares[4]]
-    recovered_secret2 = combine(test_shares2, MODULUS_Q, return_string=True)
+    recovered_secret2 = combine(test_shares2, MODULUS_Q)
     print(f"\n別の{THRESHOLD}個のシェアから復元した秘密: {recovered_secret2}")
-    print(f"元の秘密と一致: {int(recovered_secret2) == secret_int}")
+    print(f"元の秘密と一致: {recovered_secret2 == secret_int}")
     
     # 各シェアのコミットメント検証
     for i, share in enumerate(shares):

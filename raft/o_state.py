@@ -4,7 +4,7 @@ import random
 from .logger import logger
 from .timer import Timer
 from crypto.VSS import split, combine
-from crypto.parameters import KEY_1024_PARAMS
+from crypto.parameters import TEST_PARAMS
 
 class OState:
     """基本的にはここに必要なメソッドや変数を追加していく"""
@@ -158,7 +158,6 @@ class OState:
 
         # 信頼できないノードにはシェア全体を送信しない
         for entry in entries:
-            logger.info(f"VSSで分割したシェア: {entry['command'].get('value')}")
             share = entry['command'].get('value')[target_node_id - 1] # リーダーのvalueにはフルシェアが保存されているので、そこから分配されたシェアを取得
 
             
@@ -353,7 +352,7 @@ class OState:
 
         # リーダーは信頼できるので、シェアを組み合わせて元の値を取得
         if self.state == 'leader':
-            value = combine(shares, KEY_1024_PARAMS['q'])
+            value = int(combine(shares, TEST_PARAMS['q']))
         else:
             value = shares
         
@@ -386,7 +385,7 @@ class OState:
             return
 
         # ValueをVSSで分割
-        shares = split(message['value'], len(self.node.cluster), int(len(self.node.cluster) / 2) + 1, KEY_1024_PARAMS['p'], KEY_1024_PARAMS['q'], KEY_1024_PARAMS['g'])['shares']
+        shares = split(message['value'], len(self.node.cluster), int(len(self.node.cluster) / 2) + 1, TEST_PARAMS['p'], TEST_PARAMS['q'], TEST_PARAMS['g'])['shares']
         # 新しいログエントリを作成
         entry = {
             'term': self.current_term,

@@ -177,7 +177,7 @@ class PerformanceEvaluator:
         try:
             while True:
                 try:
-                    value = "keiosfc"
+                    value = 23
                     await self.write('token', value)
                 except Exception as e:
                     logger.error(f"エラーが発生しました: {e}")
