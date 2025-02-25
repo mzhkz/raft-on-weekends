@@ -1,8 +1,8 @@
 from decimal import Decimal, getcontext
 import random
 
-# TypeScript の Decimal.js での精度設定に対応
-getcontext().prec = 10_000_000  # 必要に応じて調整してください
+# TypeScript の Decimal.js での精度設定に対応（必要に応じて調整）
+getcontext().prec = 10_000_000
 
 def divmod_decimal(a, b, n):
     """
@@ -113,6 +113,8 @@ def split(secret, total_shares, threshold, modulus_p, modulus_q, generator):
 
     return {"shares": shares_list, "commitments": commitments}
 
+
+
 def lagrange_basis(data, j, q):
     """
     シェアリスト data からインデックス j のシェアに対するラグランジュ基底多項式の
@@ -125,9 +127,7 @@ def lagrange_basis(data, j, q):
     for i in range(len(data)):
         if i != j:  # 自分自身は除外
             x_i = data[i]["x"]
-            # 分子: ∏(x_i)
             numerator = (numerator * x_i) % q
-            # 分母: ∏(x_i - x_j)
             denominator = (denominator * (x_i - x_j)) % q
     
     return numerator, denominator
@@ -143,7 +143,6 @@ def lagrange_interpolate(data, q):
         num, den = lagrange_basis(data, j, q)
         # L_j(0) = ∏(x_i)/(∏(x_i-x_j))
         L_j_0 = divmod_decimal(num, den, q)
-        # S = ∑(y_j * L_j(0))
         term = (data[j]["y"] * L_j_0) % q
         secret = (secret + term) % q
     
@@ -151,18 +150,20 @@ def lagrange_interpolate(data, q):
 
 def combine(shares, modulus_q, return_string=True):
     """
-    シェアから秘密を復元
+    シェアから秘密を復元します。
     
     Parameters:
       shares: シェアのリスト
       modulus_q: 秘密分散で使用した素数
       return_string: 文字列として返すかどうか
+                     (True の場合、元の秘密が 10 進数文字列であればその形に合わせて返します)
     """
     decimal_shares = [{"x": Decimal(share["x"]), "y": Decimal(share["y"])} for share in shares]
     recovered_secret_int = lagrange_interpolate(decimal_shares, modulus_q)
     
     if return_string:
-        return hex(int(recovered_secret_int))
+        # 10進数文字列として返す（hex() ではなく単に文字列化する）
+        return str(int(recovered_secret_int))
     else:
         return int(recovered_secret_int)
 
@@ -176,22 +177,68 @@ def verify(share, C, prime, generator, q):
     
     Parameters:
       share: {'x': Decimal, 'y': Decimal}
-      C: コミットメントのリスト。各要素は {'i': Decimal, 'c': Decimal}
+      C: コミットメントのリスト。各要素は {'index': Decimal, 'value': Decimal}
       prime: p（Decimal）
       generator: g（Decimal）
       q: シークレット分散で用いた素数（Decimal）
     """
     p = Decimal(prime)
     g = Decimal(generator)
-    # 左辺: g^(y) mod p
     lG = expmod(g, share["y"], p)
     rG = Decimal(1)
     for i in range(len(C)):
         commitment = C[i]
-        # x^i を計算し、q で割った余りに統一
         e = power(share["x"], Decimal(i)) % q
-        # 各項は (C_i)^(x^i mod q) mod p
         basis = expmod(commitment["value"], e, p)
         rG = (rG * basis) % p
     return rG == lG
 
+# --- 以下は動作確認用のテストコード ---
+if __name__ == "__main__":
+    from parameters import KEY_1024_PARAMS
+
+    # 高精度計算のための設定（テスト用に精度を調整）
+    getcontext().prec = 1000
+
+    # 暗号パラメータの読み込み
+    MODULUS_P = Decimal(KEY_1024_PARAMS["p"])
+    MODULUS_Q = Decimal(KEY_1024_PARAMS["q"])
+    GENERATOR = Decimal(KEY_1024_PARAMS["g"])
+
+    # テスト設定
+    TOTAL_SHARES = 5
+    THRESHOLD = 3
+
+    print("\n=== 秘密分散テスト ===")
+    secret_int = "123"  # テスト用秘密（10進数として扱う）
+    print(f"元の秘密: {secret_int}")
+    
+    # 秘密を分散
+    vss_result = split(secret_int, TOTAL_SHARES, THRESHOLD, MODULUS_P, MODULUS_Q, GENERATOR)
+    shares = vss_result["shares"]
+    commitments = vss_result["commitments"]
+
+    print("\nShares:")
+    for i, share in enumerate(shares):
+        print(f"Share {i+1}: x={share['x']}, y={share['y']}")
+    
+    print("\nCommitments:")
+    for i, commitment in enumerate(commitments):
+        print(f"C_{i}: {commitment['value']}")
+
+    # 最初の threshold 個のシェアから秘密を再構成
+    test_shares = shares[:THRESHOLD]
+    recovered_secret = combine(test_shares, MODULUS_Q, return_string=True)
+    print(f"\n最初の{THRESHOLD}個のシェアから復元した秘密: {recovered_secret}")
+    print(f"元の秘密と一致: {recovered_secret == secret_int}")
+
+    # 別の threshold 個のシェアから秘密を再構成
+    test_shares2 = [shares[0], shares[2], shares[4]]
+    recovered_secret2 = combine(test_shares2, MODULUS_Q, return_string=True)
+    print(f"\n別の{THRESHOLD}個のシェアから復元した秘密: {recovered_secret2}")
+    print(f"元の秘密と一致: {recovered_secret2 == secret_int}")
+
+    # 各シェアのコミットメント検証
+    for i, share in enumerate(shares):
+        valid = verify(share, commitments, MODULUS_P, GENERATOR, MODULUS_Q)
+        print(f"シェア {i+1} の検証結果: {valid}")
