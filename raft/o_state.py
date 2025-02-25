@@ -4,7 +4,7 @@ import random
 from .logger import logger
 from .timer import Timer
 from crypto.VSS import split, combine
-from crypto.parameters import KEY_2048_PARAMS
+from crypto.parameters import KEY_1024_PARAMS
 
 class OState:
     """基本的にはここに必要なメソッドや変数を追加していく"""
@@ -353,7 +353,7 @@ class OState:
 
         # リーダーは信頼できるので、シェアを組み合わせて元の値を取得
         if self.state == 'leader':
-            value = combine(shares, KEY_2048_PARAMS['p'])
+            value = combine(shares, KEY_1024_PARAMS['q'])
         else:
             value = shares
         
@@ -384,9 +384,9 @@ class OState:
             client = next(c for c in self.node.clients if c.name == client_id)
             await client.send(response)
             return
-        
+
         # ValueをVSSで分割
-        shares = split(message['value'], len(self.node.cluster), int(len(self.node.cluster) / 2) + 1, KEY_2048_PARAMS['p'], KEY_2048_PARAMS['q'], KEY_2048_PARAMS['g'])['D']
+        shares = split(message['value'], len(self.node.cluster), int(len(self.node.cluster) / 2) + 1, KEY_1024_PARAMS['p'], KEY_1024_PARAMS['q'], KEY_1024_PARAMS['g'])['shares']
         # 新しいログエントリを作成
         entry = {
             'term': self.current_term,
