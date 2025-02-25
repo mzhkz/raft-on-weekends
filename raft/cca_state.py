@@ -120,16 +120,18 @@ class CCAState:
         elif message_type == 'ClientWrite':  # クライアントからのWrite要求を処理
             message['sender'] = data.get('sender')
             await self.handle_client_write(message)
-        elif message_type == 'ClientWriteShare':  # クライアントからのRead要求を処理
+        elif message_type == 'ClientWriteShare':  # クライアントからのWriteShare要求を処理
+            message['sender'] = data.get('sender')
             await self.handle_client_write_share(message)
-        elif message_type == 'ClientGetShare':
+        elif message_type == 'ClientGetShare':  # クライアントからのGetShare要求を処理
+            message['sender'] = data.get('sender')
             await self.handle_client_get_share(message)
 
     async def start(self):
         """ノードの起動時の初期化処理"""
         logger.info(f"{self.node.name} starting as {self.state}")
         self.init_timers()
-        self.garbage_collection_timer.start() # 古いバケットを削除するタイマーを開始
+        # self.garbage_collection_timer.start() # 古いバケットを削除するタイマーを開始
         
         if self.state == 'follower':
             # logger.info(f"{self.node.name} starting election timer")
@@ -190,7 +192,8 @@ class CCAState:
                 'bucket_id': entry['command']['bucket_id']
             }
             # 読み込みロックを解除
-            self.read_locks[entry_key].set() 
+            if entry_key in self.read_locks:
+                self.read_locks[entry_key].set()
         # logger.info(f"{self.node.name} applied log {self.last_applied}")
 
     async def become_leader(self):
@@ -294,6 +297,8 @@ class CCAState:
 
                     # バケットが存在するか
                     for entry in message['entries']:
+                        self.read_locks[entry['command']['key']] = asyncio.Event()
+                        logger.info(f"read lock: {entry['command']['key']}")
                         bucket_id = entry['command']['bucket_id']
                         # バケットが存在しない場合は、バケットが作成されるまで待つ
                         if bucket_id not in self.share_buckets:
@@ -386,7 +391,7 @@ class CCAState:
             'command': {
                 'type': 'set',
                 'key': message['key'],
-                'value': message['commitment'],
+                'value': message['commitments'], # valueにはcommitmentsを保存
                 'bucket_id': bucket['bucket_id']
             },
             "request_id": request_id
@@ -402,6 +407,7 @@ class CCAState:
 
         # 書き込むキーへの読み込みをロック
         self.read_locks[message['key']] = asyncio.Event()
+        logger.info(f"read lock: {message['key']}")
         
         # 全フォロワーにログを複製
         for node in self.node.cluster:
@@ -413,6 +419,8 @@ class CCAState:
         """クライアントからのWrite要求を処理する"""
         client_id = message.get('sender')
         request_id = message.get('request_id', str(uuid.uuid4()))
+
+        logger.info(f"write share: {message}")
 
         shares = message.get('shares')
         bucket_id = request_id # バケットIDはリクエストIDと同じ

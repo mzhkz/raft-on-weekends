@@ -36,12 +36,15 @@ class CCAPerformanceEvaluator:
 
         # cca client用の変数
         self.granted_share_events = {}
-
+        self.share_granted = {}
         logger.info(f"CCAPerformanceEvaluator {self.name} initialized")
         
     def load_node_portlist(self):
         with open('node_portlist.json', 'r') as file:
-            self.node_host_port = json.load(file)    
+            self.node_host_port = json.load(file)   
+        for key, value in self.node_host_port.items():
+            if key.startswith('node'):
+                self.cluster_info[key] = value
 
     async def connect(self):
         loop = asyncio.get_event_loop()
@@ -52,6 +55,7 @@ class CCAPerformanceEvaluator:
         )
 
     def handle_response(self, response):
+        logger.info(f"response: {response}")
         request_id = response.get('request_id')
         response_type = response.get('type')
         if response_type == 'ClientWriteResponse':
@@ -79,9 +83,12 @@ class CCAPerformanceEvaluator:
     def handle_write_share_response(self, response):
         """シェアを受け取った時の処理"""
         request_id = response.get('request_id')
-        if self.share_granted > len(self.cluster_info.keys()) // 2:
-            if request_id in self.granted_share_events:
-                self.granted_share_events[request_id].set()
+        if request_id in self.granted_share_events and request_id in self.share_granted:
+            self.share_granted[request_id] += 1
+            if self.share_granted[request_id] > len(self.cluster_info.keys()) // 2:
+                if request_id in self.granted_share_events:
+                    self.granted_share_events[request_id].set()
+                    del self.share_granted[request_id]
 
     def handle_get_share_response(self, response):
         """シェアを受け取った時の処理"""
@@ -89,6 +96,8 @@ class CCAPerformanceEvaluator:
         if response.get('success'):
             # 読み込みリクエストの場合は、結果を保存して、read_eventを発火
             if request_id in self.read_events:
+                if not request_id in self.read_results:
+                    self.read_results[request_id] = []
                 # シェアを保存
                 self.read_results[request_id].append(response.get('shares'))
                 # 2個のノードからシェアをもらったら、read_eventを発火
@@ -101,13 +110,10 @@ class CCAPerformanceEvaluator:
                     self.read_events[request_id].set()
 
     async def send_request(self, request, target_node):
-        leader_ip = self.node_host_port[target_node]['host']
-        leader_port = self.node_host_port[target_node]['internal_port']
+        target_ip = self.node_host_port[target_node]['host']
+        target_port = self.node_host_port[target_node]['internal_port']
         data = MessagePackSerializer.pack(request)
-        self.transport.sendto(data, (leader_ip, leader_port))
-
-    async def send_request(self, request):
-        await self.send_request(request, self.current_leader)
+        self.transport.sendto(data, (target_ip, target_port))
 
     async def read(self, key):
         request_id = str(uuid.uuid4())
@@ -120,19 +126,27 @@ class CCAPerformanceEvaluator:
         }
 
         # リーダーともう一つのノードにリクエストを送信
-        await self.send_request({"data": request})  # リーダーにリクエスト
+        await self.send_request({"data": request}, self.current_leader)  # リーダーにリクエスト
         await self.send_request({"data": request}, list(self.cluster_info.keys())[1])  # もう一つのノードにリクエスト
 
         # リーダーからのレスポンスを待つ
         try:
             await asyncio.wait_for(self.read_events[request_id].wait(), timeout=5.0)
+            del self.read_events[request_id]
+
+            unique_shares = []
+            for share in self.read_results[request_id]:
+                if share not in unique_shares:
+                    unique_shares.append(share)
+
+            logger.info(f"unique_shares: {unique_shares}")
+
+            result = combine(unique_shares, TEST_PARAMS['q']) # シェアを結合
+            del self.read_results[request_id]
         except asyncio.TimeoutError:
             logger.error(f"リーダーからのReadレスポンスがタイムアウトしました: {request_id}")
-            return None
-        finally:
             del self.read_events[request_id]
-            result = combine(self.read_results[request_id], TEST_PARAMS['q']) # シェアを結合
-            del self.read_results[request_id]
+            return None
 
         return result
 
@@ -143,32 +157,43 @@ class CCAPerformanceEvaluator:
         node_count = len(self.cluster_info.keys())
 
         # シェアをレプリケーション  
-        (shares, commitment) = split(value, node_count, node_count, TEST_PARAMS['p'], TEST_PARAMS['q'], TEST_PARAMS['g'])
+        result = split(value, node_count, node_count, TEST_PARAMS['p'], TEST_PARAMS['q'], TEST_PARAMS['g'])
+        shares = result["shares"]
+        commitments = result["commitments"]
 
         self.granted_share_events[request_id] = asyncio.Event()
+        self.share_granted[request_id] = 0
 
         for node_name in self.cluster_info.keys():
+            node_index = list(self.cluster_info.keys()).index(node_name)
+            shares_copy = shares.copy()
+            shares_copy.pop(node_index)
             request = {
                 'type': 'ClientWriteShare',
-                'shares': shares[0:node_count-1], ## 擬似的なシェア分配
+                'shares': shares, ## 擬似的なシェア分配
                 'request_id': request_id,
             }
             await self.send_request({"data": request}, node_name)
 
         # シェアが揃ったら、コミットを実行
-        await asyncio.wait_for(self.granted_share_events[request_id].wait(), timeout=5.0)
-        del self.granted_share_events[request_id]
+        try:
+            await asyncio.wait_for(self.granted_share_events[request_id].wait(), timeout=5.0)
+            del self.granted_share_events[request_id]
+        except asyncio.TimeoutError:
+            logger.error(f"シェアが揃わないままタイムアウトしました: {request_id}")
+            del self.granted_share_events[request_id]
+            return False
         
         self.commit_events[request_id] = asyncio.Event()
         
         request = {
             'type': 'ClientWrite',
             'key': key,
-            'value': commitment,
+            'commitments': commitments,
             'request_id': request_id,
         }
         
-        await self.send_request({"data": request})
+        await self.send_request({"data": request}, self.current_leader)
         self.total_requests += 1
         
         try:
@@ -217,12 +242,8 @@ class CCAPerformanceEvaluator:
         
         try:
             while True:
-                try:
-                    value = 23
-                    await self.write('token', value)
-                except Exception as e:
-                    logger.error(e)
-                    await asyncio.sleep(1)
+                value = 23
+                await self.write('token', value)
         finally:
             self.stats_timer.stop()  # 統計タイマーを停止
             self.transport.close()

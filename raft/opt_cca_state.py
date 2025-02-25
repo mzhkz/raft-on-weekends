@@ -123,8 +123,10 @@ class OptCCAState:
             message['sender'] = data.get('sender')
             await self.handle_client_write(message)
         elif message_type == 'ClientWriteShare':  # クライアントからのRead要求を処理
+            message['sender'] = data.get('sender')
             await self.handle_client_write_share(message)
         elif message_type == 'ClientGetShare':
+            message['sender'] = data.get('sender')
             await self.handle_client_get_share(message)
 
     async def start(self):
@@ -382,7 +384,7 @@ class OptCCAState:
             'command': {
                 'type': 'set',
                 'key': message['key'],
-                'value': message['commitment'],
+                'value': message['commitments'],
                 'bucket_id': bucket['bucket_id']
             },
             "request_id": request_id

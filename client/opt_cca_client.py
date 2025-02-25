@@ -41,6 +41,9 @@ class OptCCAPerformanceEvaluator:
     def load_node_portlist(self):
         with open('node_portlist.json', 'r') as file:
             self.node_host_port = json.load(file)    
+        for key, value in self.node_host_port.items():
+            if key.startswith('node'):
+                self.cluster_info[key] = value
 
     async def connect(self):
         loop = asyncio.get_event_loop()
@@ -86,6 +89,8 @@ class OptCCAPerformanceEvaluator:
             # 読み込みリクエストの場合は、結果を保存して、read_eventを発火
             if request_id in self.read_events:
                 # シェアを保存
+                if not request_id in self.read_results:
+                    self.read_results[request_id] = []
                 self.read_results[request_id].append(response.get('shares'))
                 # 2個のノードからシェアをもらったら、read_eventを発火
                 if len(self.read_results[request_id]) >= 2:
@@ -139,7 +144,9 @@ class OptCCAPerformanceEvaluator:
         node_count = len(self.cluster_info.keys())
 
         # シェアをレプリケーション  
-        (shares, commitment) = split(value, node_count, node_count, TEST_PARAMS['p'], TEST_PARAMS['q'], TEST_PARAMS['g'])
+        result = split(value, node_count, node_count, TEST_PARAMS['p'], TEST_PARAMS['q'], TEST_PARAMS['g'])
+        shares = result["shares"]
+        commitments = result["commitments"]
 
         for node_name in self.cluster_info.keys():
             if node_name != self.current_leader:
@@ -155,7 +162,7 @@ class OptCCAPerformanceEvaluator:
         request = {
             'type': 'ClientWrite',
             'key': key,
-            'value': commitment,
+            'commitments': commitments,
             'shares': shares[0:node_count-1],## 擬似的なシェア分配
             'request_id': request_id,
         }
