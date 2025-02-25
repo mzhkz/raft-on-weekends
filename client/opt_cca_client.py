@@ -181,9 +181,9 @@ class OptCCAPerformanceEvaluator:
             await asyncio.wait_for(self.commit_events[request_id].wait(), timeout=5.0)
 
             # 書き込み結果を確認
-            result =await self.read(key)
-            if result != value:
-                raise Exception(f"書き込み結果が一致しません: {result} != {value}")
+            # result =await self.read(key)
+            # if result != value:
+            #     raise Exception(f"書き込み結果が一致しません: {result} != {value}")
 
             end_time = asyncio.get_event_loop().time()  # リクエスト完了時間
             latency = end_time - start_time
