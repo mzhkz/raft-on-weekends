@@ -3,9 +3,7 @@ from .logger import logger
 import random
 from .timer import Timer
 import uuid
-
-
-class OptCCAState:
+class CCAState:
     """基本的にはここに必要なメソッドや変数を追加していく"""
     
     def __init__(self, node):
@@ -38,11 +36,11 @@ class OptCCAState:
         ## cca-Raft
         self.share_buckets = {} # バケットを保存する辞書
         self.bucket_events = {} # バケット作成を待つためのイベント
-        self.read_locks = {} # 読み込みロックを保存する辞書
+        self.read_locks = {} # 書き込み完了を待つためのイベント
 
         self.garbage_collection_timer = None
 
-        logger.info(f"OptCCAState {self.node.name} initialized")
+        logger.info(f"CCAState {self.node.name} initialized")
 
 
 
@@ -122,10 +120,10 @@ class OptCCAState:
         elif message_type == 'ClientWrite':  # クライアントからのWrite要求を処理
             message['sender'] = data.get('sender')
             await self.handle_client_write(message)
-        elif message_type == 'ClientWriteShare':  # クライアントからのRead要求を処理
+        elif message_type == 'ClientWriteShare':  # クライアントからのWriteShare要求を処理
             message['sender'] = data.get('sender')
             await self.handle_client_write_share(message)
-        elif message_type == 'ClientGetShare':
+        elif message_type == 'ClientGetShare':  # クライアントからのGetShare要求を処理
             message['sender'] = data.get('sender')
             await self.handle_client_get_share(message)
 
@@ -133,7 +131,7 @@ class OptCCAState:
         """ノードの起動時の初期化処理"""
         logger.info(f"{self.node.name} starting as {self.state}")
         self.init_timers()
-        self.garbage_collection_timer.start() # 古いバケットを削除するタイマーを開始
+        # self.garbage_collection_timer.start() # 古いバケットを削除するタイマーを開始
         
         if self.state == 'follower':
             # logger.info(f"{self.node.name} starting election timer")
@@ -193,10 +191,9 @@ class OptCCAState:
                 'value': entry['command']['value'],
                 'bucket_id': entry['command']['bucket_id']
             }
-
             # 読み込みロックを解除
-            self.read_locks[entry_key].set()
-
+            if entry_key in self.read_locks:
+                self.read_locks[entry_key].set()
         # logger.info(f"{self.node.name} applied log {self.last_applied}")
 
     async def become_leader(self):
@@ -298,8 +295,9 @@ class OptCCAState:
                     self.logs = self.logs[:message['prev_log_index'] + 1]
                     self.logs.extend(message['entries'])
 
-                    # バケットが存在するか確かめる。なければ、バケットが作成されるまで待つ
+                    # バケットが存在するか
                     for entry in message['entries']:
+                        self.read_locks[entry['command']['key']] = asyncio.Event()
                         bucket_id = entry['command']['bucket_id']
                         # バケットが存在しない場合は、バケットが作成されるまで待つ
                         if bucket_id not in self.share_buckets:
@@ -410,7 +408,6 @@ class OptCCAState:
         """クライアントからのWrite要求を処理する"""
         client_id = message.get('sender')
         request_id = message.get('request_id', str(uuid.uuid4()))
-
         shares = message.get('shares')
         bucket_id = request_id # バケットIDはリクエストIDと同じ
         bucket = {
@@ -446,9 +443,11 @@ class OptCCAState:
         if self.read_locks.get(key):
             await self.read_locks[key].wait()
             del self.read_locks[key]
-
+        
         bucket_id = self.statemachine.get(key, {}).get('bucket_id')
         bucket = self.share_buckets.get(bucket_id)
+
+        
 
         # バケットが存在しない場合はエラー
         if not bucket:
@@ -483,8 +482,7 @@ class OptCCAState:
             for match_idx in self.match_index.values():
                 if match_idx >= n:
                     replicated += 1
-            
-            # 過半数のノードがコミットしたら、コミットする
+                    
             if replicated > len(self.node.cluster) // 2:
                 self.commit_index = n
                 await self.apply_logs()
