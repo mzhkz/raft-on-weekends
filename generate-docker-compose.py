@@ -32,7 +32,8 @@ def generate_docker_compose(num_nodes, client_nums, state_name):
                 network_name: {
                     'ipv4_address': ipv4_address
                 }
-            }
+            },
+            'volumes': [f'./dump:/app/dump']
         }
         node_portlist[node_name] = {
             'host': ipv4_address,
@@ -58,7 +59,8 @@ def generate_docker_compose(num_nodes, client_nums, state_name):
                 f'node{num_nodes}': {
                     'condition': 'service_started'
                 }
-            }
+            },
+            'volumes': [f'./dump:/app/dump']
         }
         node_portlist[client_name] = {
             'host': ipv4_address,

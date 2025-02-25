@@ -15,7 +15,7 @@ services:
     - --name
     - client1
     - --client
-    - opt_cca
+    - default
     container_name: client1
     depends_on:
       node3:
@@ -25,6 +25,8 @@ services:
         ipv4_address: 10.0.0.5
     ports:
     - 5558:8888/udp
+    volumes:
+    - ./dump:/app/dump
   node1:
     build: .
     command:
@@ -40,7 +42,7 @@ services:
     - --clients
     - client1
     - --state
-    - opt_cca
+    - default
     container_name: node1
     environment:
     - NODE=node1
@@ -51,6 +53,8 @@ services:
         ipv4_address: 10.0.0.2
     ports:
     - 3333:8080/udp
+    volumes:
+    - ./dump:/app/dump
   node2:
     build: .
     command:
@@ -66,7 +70,7 @@ services:
     - --clients
     - client1
     - --state
-    - opt_cca
+    - default
     container_name: node2
     environment:
     - NODE=node2
@@ -77,6 +81,8 @@ services:
         ipv4_address: 10.0.0.3
     ports:
     - 3334:8080/udp
+    volumes:
+    - ./dump:/app/dump
   node3:
     build: .
     command:
@@ -92,7 +98,7 @@ services:
     - --clients
     - client1
     - --state
-    - opt_cca
+    - default
     container_name: node3
     environment:
     - NODE=node3
@@ -103,4 +109,6 @@ services:
         ipv4_address: 10.0.0.4
     ports:
     - 3335:8080/udp
+    volumes:
+    - ./dump:/app/dump
 version: '3.8'
