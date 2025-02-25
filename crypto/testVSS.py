@@ -4,18 +4,25 @@ from decimal import Decimal
 
 # --- 以下は動作確認用の例 ---
 if __name__ == "__main__":
-    # ※以下は例としてのパラメータです。実際の暗号用途では十分大きな素数などを用いる必要があります。
-    p = Decimal("23")         # 素数（コミットメント計算用）
-    q = Decimal("19")         # シークレット分散用の素数（シークレットは q 未満である必要があります）
-    generator = Decimal("5")  # p 未満の生成元
+    # 暗号パラメータ
+    MODULUS_P = KEY_1024_PARAMS["p"]
+    MODULUS_Q = KEY_1024_PARAMS["q"]
+    GENERATOR = KEY_1024_PARAMS["g"]
 
-    secret = "0x7"  # "0x" で始まる 16 進数文字列としての秘密
-    n = 5           # 発行するシェア数
-    k = 3           # 秘密復元に必要なシェア数（しきい値）
+    # テスト設定
+    TOTAL_SHARES = 5
+    THRESHOLD = 3
 
-    result = split(secret, n, k, p, q, generator)
-    shares = result["D"]
-    commitments = result["C"]
+    print("\n=== 16進数秘密テスト ===")
+    hex_secret = "0x1d2b7"
+    secret_int = int(hex_secret, 16)  # 16進数を整数に変換
+    print(f"元の秘密（整数）: {secret_int}")
+    print(f"元の秘密（16進数）: {hex(secret_int)}")
+    
+    # 整数値を渡す
+    vss_result = split(secret_int, TOTAL_SHARES, THRESHOLD, MODULUS_P, MODULUS_Q, GENERATOR)
+    shares = vss_result["shares"]
+    commitments = vss_result["commitments"]
 
     print("Shares:")
     for share in shares:
@@ -26,9 +33,11 @@ if __name__ == "__main__":
         print(commitment)
 
     # 最初の k 個のシェアから秘密を再構成
-    recovered_secret = combine(shares[:k], q)
-    print("\nRecovered Secret:", recovered_secret)
+    recovered_secret = combine(shares[:THRESHOLD], MODULUS_Q, return_string=False)
+    print("\nRecovered Secret (整数):", recovered_secret)
+    print("Recovered Secret (16進数):", hex(recovered_secret))
+    print("元の秘密と一致:", recovered_secret == secret_int)
 
     # 最初のシェアの検証
-    valid = verify(shares[0], commitments, p, generator, q)
-    print("\nVerification of first share:", valid)
+    valid = verify(shares[0], commitments, MODULUS_P, GENERATOR, MODULUS_Q)
+    print("Verification of first share:", valid)

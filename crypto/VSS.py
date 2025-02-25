@@ -76,51 +76,42 @@ def polynomial(x, a, q):
         value = (value + expmod(x, Decimal(i), q) * a[i]) % q
     return value
 
-def split(secret, n, k, p, q, generator):
+def split(secret, total_shares, threshold, modulus_p, modulus_q, generator):
     """
-    Feldman の VSS による秘密分散を行う関数です。
+    Feldman の VSS による秘密分散を行う関数
     
     Parameters:
-      secret: "0x" で始まる 16 進数文字列（秘密）
-      n: 発行するシェアの総数
-      k: 秘密復元に必要なシェア数（しきい値）
-      p, q, generator: Decimal 型のパラメータ（p, q は素数、generator は p 未満の生成元）
-    
-    戻り値は辞書で、キー "D" にシェアのリスト、"C" に各係数に対するコミットメントのリストが入ります。
+      secret: 分散する秘密（整数または16進数文字列）
+      total_shares: 生成するシェアの総数
+      threshold: 復元に必要な最小シェア数
+      modulus_p: コミットメント用の素数
+      modulus_q: 秘密分散用の素数（秘密はこの値未満である必要あり）
+      generator: 生成元の値
     """
-    if not isinstance(secret, str):
-        raise TypeError("The secret must be a string.")
-    if not secret.startswith("0x"):
-        raise TypeError("The secret must be a hex string starting with '0x'.")
-    if not (isinstance(p, Decimal) and isinstance(q, Decimal) and isinstance(generator, Decimal)):
-        raise TypeError("p, q, and generator must be Decimal instances.")
-
-    S = Decimal(int(secret, 16))
-    g = generator
-
-    if S > q:
-        raise ValueError("The secret must be less than q.")
-    if g > p:
-        raise ValueError("The generator must be less than p.")
-
-    # a[0] が秘密、a[1..k-1] がランダム係数
-    a = [S]
-    D = []  # シェアのリスト
-    # コミットメント C[0] は g^S mod p となる
-    C = [{"i": Decimal(0), "c": expmod(g, S, p)}]
+    # 秘密を整数に変換
+    if isinstance(secret, str) and secret.startswith("0x"):
+        secret_int = Decimal(int(secret, 16))
+    else:
+        secret_int = Decimal(int(secret))
     
-    for i in range(1, k):
-        coeff = random_decimal(Decimal(1), q - Decimal(1))
-        a.append(coeff)
-        C.append({"i": Decimal(i), "c": expmod(g, coeff, p)})
-    
-    # シェア (x, y) を計算（x = 1, 2, …, n）
-    for i in range(n):
-        x = Decimal(i + 1)
-        share = {"x": x, "y": polynomial(x, a, q)}
-        D.append(share)
-    
-    return {"D": D, "C": C}
+    if secret_int > modulus_q:
+        raise ValueError(f"秘密の整数値({secret_int})は modulus_q({modulus_q}) より小さい必要があります")
+
+    coefficients = [secret_int]
+    shares_list = []
+    commitments = [{"index": Decimal(0), "value": expmod(generator, secret_int, modulus_p)}]
+
+    for i in range(1, threshold):
+        random_coeff = random_decimal(Decimal(1), modulus_q - Decimal(1))
+        coefficients.append(random_coeff)
+        commitments.append({"index": Decimal(i), "value": expmod(generator, random_coeff, modulus_p)})
+
+    for share_index in range(total_shares):
+        x_value = Decimal(share_index + 1)
+        share = {"x": x_value, "y": polynomial(x_value, coefficients, modulus_q)}
+        shares_list.append(share)
+
+    return {"shares": shares_list, "commitments": commitments}
 
 def lagrange_basis(data, j, q):
     """
@@ -148,17 +139,22 @@ def lagrange_interpolate(data, q):
         S = (S + data[i]["y"] * divmod_decimal(num, den, q)) % q
     return S
 
-def combine(shares, prime):
+def combine(shares, modulus_q, return_string=True):
     """
-    複数のシェアから秘密を再構成します。
+    シェアから秘密を復元
     
     Parameters:
-      shares: シェアのリスト（各シェアは {'x': Decimal, 'y': Decimal} で表される）
-      prime: q の値（Decimal）
+      shares: シェアのリスト
+      modulus_q: 秘密分散で使用した素数
+      return_string: 文字列として返すかどうか
     """
-    # 各シェアを Decimal 型に整形してからラグランジュ補間を実行
     decimal_shares = [{"x": Decimal(share["x"]), "y": Decimal(share["y"])} for share in shares]
-    return lagrange_interpolate(decimal_shares, prime)
+    recovered_secret_int = lagrange_interpolate(decimal_shares, modulus_q)
+    
+    if return_string:
+        return hex(int(recovered_secret_int))
+    else:
+        return int(recovered_secret_int)
 
 def verify(share, C, prime, generator, q):
     """
@@ -185,7 +181,7 @@ def verify(share, C, prime, generator, q):
         # x^i を計算し、q で割った余りに統一
         e = power(share["x"], Decimal(i)) % q
         # 各項は (C_i)^(x^i mod q) mod p
-        basis = expmod(commitment["c"], e, p)
+        basis = expmod(commitment["value"], e, p)
         rG = (rG * basis) % p
     return rG == lG
 
