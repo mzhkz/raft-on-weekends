@@ -12,7 +12,7 @@ from crypto.parameters import TEST_PARAMS
 
 from client.network import ClientUDPProtocol
 
-class CCAPerformanceEvaluator:
+class OptCCAPerformanceEvaluator:
     def __init__(self, name):
         self.name = name
         self.commit_events = {}
@@ -36,7 +36,7 @@ class CCAPerformanceEvaluator:
 
         # cca client用の変数
 
-        logger.info(f"CCAPerformanceEvaluator {self.name} initialized")
+        logger.info(f"OptCCAPerformanceEvaluator {self.name} initialized")
         
     def load_node_portlist(self):
         with open('node_portlist.json', 'r') as file:
@@ -150,9 +150,6 @@ class CCAPerformanceEvaluator:
         result = split(value, node_count, node_count, TEST_PARAMS['p'], TEST_PARAMS['q'], TEST_PARAMS['g'])
         shares = result["shares"]
         commitments = result["commitments"]
-
-        self.granted_share_events[request_id] = asyncio.Event()
-        self.share_granted[request_id] = 0
 
         for node_name in self.cluster_info.keys():
             if node_name != self.current_leader:

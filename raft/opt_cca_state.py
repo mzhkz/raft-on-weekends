@@ -3,7 +3,7 @@ from .logger import logger
 import random
 from .timer import Timer
 import uuid
-class CCAState:
+class OptCCAState:
     """基本的にはここに必要なメソッドや変数を追加していく"""
     
     def __init__(self, node):
@@ -40,7 +40,7 @@ class CCAState:
 
         self.garbage_collection_timer = None
 
-        logger.info(f"CCAState {self.node.name} initialized")
+        logger.info(f"OptCCAState {self.node.name} initialized")
 
 
 
