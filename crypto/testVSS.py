@@ -1,43 +1,52 @@
 from VSS import split, combine, verify
 from parameters import KEY_1024_PARAMS
-from decimal import Decimal
+from decimal import Decimal, getcontext
+
+# 高精度計算のための設定
+getcontext().prec = 1000
 
 # --- 以下は動作確認用の例 ---
 if __name__ == "__main__":
     # 暗号パラメータ
-    MODULUS_P = KEY_1024_PARAMS["p"]
-    MODULUS_Q = KEY_1024_PARAMS["q"]
-    GENERATOR = KEY_1024_PARAMS["g"]
+    MODULUS_P = Decimal(KEY_1024_PARAMS["p"])
+    MODULUS_Q = Decimal(KEY_1024_PARAMS["q"])
+    GENERATOR = Decimal(KEY_1024_PARAMS["g"])
 
     # テスト設定
     TOTAL_SHARES = 5
     THRESHOLD = 3
 
-    print("\n=== 16進数秘密テスト ===")
-    hex_secret = "0x1d2b7"
-    secret_int = int(hex_secret, 16)  # 16進数を整数に変換
-    print(f"元の秘密（整数）: {secret_int}")
-    print(f"元の秘密（16進数）: {hex(secret_int)}")
+    print("\n=== 秘密分散テスト ===")
+    # 小さい値でテスト
+    secret_int = "123"
+    print(f"元の秘密: {secret_int}")
     
-    # 整数値を渡す
+    # 秘密を分散
     vss_result = split(secret_int, TOTAL_SHARES, THRESHOLD, MODULUS_P, MODULUS_Q, GENERATOR)
     shares = vss_result["shares"]
     commitments = vss_result["commitments"]
 
-    print("Shares:")
-    for share in shares:
-        print(share)
+    print("\nShares:")
+    for i, share in enumerate(shares):
+        print(f"Share {i+1}: x={share['x']}, y={share['y']}")
     
     print("\nCommitments:")
-    for commitment in commitments:
-        print(commitment)
+    for i, commitment in enumerate(commitments):
+        print(f"C_{i}: {commitment['value']}")
 
-    # 最初の k 個のシェアから秘密を再構成
-    recovered_secret = combine(shares[:THRESHOLD], MODULUS_Q, return_string=False)
-    print("\nRecovered Secret (整数):", recovered_secret)
-    print("Recovered Secret (16進数):", hex(recovered_secret))
-    print("元の秘密と一致:", recovered_secret == secret_int)
+    # 最初の threshold 個のシェアから秘密を再構成
+    test_shares = shares[:THRESHOLD]
+    recovered_secret = combine(test_shares, MODULUS_Q, return_string=True)
+    print(f"\n最初の{THRESHOLD}個のシェアから復元した秘密: {recovered_secret}")
+    print(f"元の秘密と一致: {recovered_secret == secret_int}")
 
-    # 最初のシェアの検証
-    valid = verify(shares[0], commitments, MODULUS_P, GENERATOR, MODULUS_Q)
-    print("Verification of first share:", valid)
+    # 別の threshold 個のシェアから秘密を再構成
+    test_shares2 = [shares[0], shares[2], shares[4]]
+    recovered_secret2 = combine(test_shares2, MODULUS_Q, return_string=True)
+    print(f"\n別の{THRESHOLD}個のシェアから復元した秘密: {recovered_secret2}")
+    print(f"元の秘密と一致: {recovered_secret2 == secret_int}")
+
+    # シェアの検証
+    for i, share in enumerate(shares):
+        valid = verify(share, commitments, MODULUS_P, GENERATOR, MODULUS_Q)
+        print(f"シェア {i+1} の検証結果: {valid}")

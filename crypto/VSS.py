@@ -115,29 +115,39 @@ def split(secret, total_shares, threshold, modulus_p, modulus_q, generator):
 
 def lagrange_basis(data, j, q):
     """
-    シェアリスト data からインデックス j のシェアに対するラグランジュ基底の
-    分子と分母（0 での評価）を計算します。
+    シェアリスト data からインデックス j のシェアに対するラグランジュ基底多項式の
+    分子と分母を計算します。
     """
     numerator = Decimal(1)
     denominator = Decimal(1)
     x_j = data[j]["x"]
+    
     for i in range(len(data)):
-        if data[i]["x"] != x_j:
-            denominator = (denominator * (data[i]["x"] - x_j)) % q
-    for i in range(len(data)):
-        if data[i]["x"] != x_j:
-            numerator = (numerator * data[i]["x"]) % q
+        if i != j:  # 自分自身は除外
+            x_i = data[i]["x"]
+            # 分子: ∏(x_i)
+            numerator = (numerator * x_i) % q
+            # 分母: ∏(x_i - x_j)
+            denominator = (denominator * (x_i - x_j)) % q
+    
     return numerator, denominator
 
 def lagrange_interpolate(data, q):
     """
     ラグランジュ補間を用いてシェアから秘密を再構成します。
+    f(0) = ∑(y_j * ∏(x_i/(x_i-x_j))) を計算します。
     """
-    S = Decimal(0)
-    for i in range(len(data)):
-        num, den = lagrange_basis(data, i, q)
-        S = (S + data[i]["y"] * divmod_decimal(num, den, q)) % q
-    return S
+    secret = Decimal(0)
+    
+    for j in range(len(data)):
+        num, den = lagrange_basis(data, j, q)
+        # L_j(0) = ∏(x_i)/(∏(x_i-x_j))
+        L_j_0 = divmod_decimal(num, den, q)
+        # S = ∑(y_j * L_j(0))
+        term = (data[j]["y"] * L_j_0) % q
+        secret = (secret + term) % q
+    
+    return secret
 
 def combine(shares, modulus_q, return_string=True):
     """
