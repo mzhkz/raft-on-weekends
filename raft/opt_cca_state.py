@@ -305,12 +305,8 @@ class OptCCAState:
                         # バケットが存在しない場合は、バケットが作成されるまで待つ
                         if bucket_id not in self.share_buckets:
                             self.bucket_events[bucket_id] = asyncio.Event()
-                            try:
-                                await asyncio.wait_for(self.bucket_events[bucket_id].wait(), timeout=5.0)
-                            except asyncio.TimeoutError:
-                                logger.error(f"Failed to get bucket: bucket_id={bucket_id}")
-                            finally:
-                                del self.bucket_events[bucket_id]
+                            await self.bucket_events[bucket_id].wait()
+                            del self.bucket_events[bucket_id]
                 
                 # コミットインデックスの更新
                 if message['leader_commit'] > self.commit_index:

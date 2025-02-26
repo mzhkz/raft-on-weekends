@@ -62,10 +62,10 @@ class CCAState:
 
 
         # 古いバケットを削除するタイマー
-        self.garbage_collection_timer = Timer(
-            interval=10,
-            callback=self.garbage_collection
-        )
+        # self.garbage_collection_timer = Timer(
+        #     interval=10,
+        #     callback=self.garbage_collection
+        # )
 
     async def start_election(self):
         """選挙を開始する"""
@@ -304,12 +304,8 @@ class CCAState:
                         # バケットが存在しない場合は、バケットが作成されるまで待つ
                         if bucket_id not in self.share_buckets:
                             self.bucket_events[bucket_id] = asyncio.Event()
-                            try:
-                                await asyncio.wait_for(self.bucket_events[bucket_id].wait(), timeout=5.0)
-                            except asyncio.TimeoutError:
-                                logger.error(f"Failed to get bucket: bucket_id={bucket_id}")
-                            finally:
-                                del self.bucket_events[bucket_id]
+                            await self.bucket_events[bucket_id].wait()
+                            del self.bucket_events[bucket_id]
                 
                 # コミットインデックスの更新
                 if message['leader_commit'] > self.commit_index:
@@ -364,13 +360,13 @@ class CCAState:
             await client.send(response)
             return
         
-        bucket = self.share_buckets.get(request_id, None)
+        bucket = self.share_buckets.get(request_id)
         # バケットが存在しない場合は、バケットが作成されるまで待つ
         if not bucket:
             self.bucket_events[request_id] = asyncio.Event()
             try:
                 # バケットが作成されるまで待つ
-                await asyncio.wait_for(self.bucket_events[request_id].wait(), timeout=1.0)  
+                await self.bucket_events[request_id].wait()
                 # バケットが作成されたら、バケットを取得
                 bucket = self.share_buckets[request_id]
             except asyncio.TimeoutError:
@@ -384,9 +380,6 @@ class CCAState:
                 await client.send(response)
             finally:
                 del self.bucket_events[request_id]
-
-
-        bucket = self.share_buckets[request_id]
         
         # 新しいログエントリを作成
         entry = {
@@ -467,7 +460,6 @@ class CCAState:
         bucket = self.share_buckets.get(bucket_id)
 
         
-
         # バケットが存在しない場合はエラー
         if not bucket:
             response = {

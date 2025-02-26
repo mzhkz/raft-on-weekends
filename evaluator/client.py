@@ -275,20 +275,14 @@ class PerformanceEvaluator:
         """ パフォーマンスデータを保存 """
 
         write_ratio_name = str(self.write_ratio).replace('.', '_')
-        with open(f'./dump/{self.__class__.__name__}-{self.name}-s{self.requests_per_second}-r{write_ratio_name}-k{self.key_range}-d{self.evaluation_duration}.json', 'w') as f:
+        with open(f'./dump/{self.__class__.__name__}-{self.name}-s{self.requests_per_second}-r{write_ratio_name}-k{self.key_range}-d{self.duration}.json', 'w') as f:
             json.dump(self.performance_data, f)
 
 
     async def run(self):
         """ 評価を実行 """
 
-        # パラメータ設定
-        self.requests_per_second = 1000  # 1秒あたりのリクエスト数
-        self.write_ratio = 1.0  # 書き込みの割合（0.0〜1.0）
-        self.key_range = 10  # キーの範囲（1〜key_range）
-        self.evaluation_duration = 4  # 評価実行時間（秒）
-
-        logger.info(f"設定: リクエスト数/秒 = {self.requests_per_second}, 書き込み比率 = {self.write_ratio}, キーの範囲 = {self.key_range}, 実行時間 = {self.evaluation_duration}秒")
+        logger.info(f"設定: リクエスト数/秒 = {self.requests_per_second}, 書き込み比率 = {self.write_ratio}, キーの範囲 = {self.key_range}, 実行時間 = {self.duration}秒")
 
         # 1.5秒待ってから評価開始 nodeが起動するまで待つ
         await asyncio.sleep(1.5)
@@ -314,7 +308,7 @@ class PerformanceEvaluator:
         interval = 1.0 / self.requests_per_second
 
         # 終了時間を設定
-        end_time = self.start_time + self.evaluation_duration
+        end_time = self.start_time + self.duration
         
         try:
             request_count = 0
@@ -342,7 +336,7 @@ class PerformanceEvaluator:
                     logger.error(f"エラーが発生しました: {e}")
             
             # 評価終了メッセージ
-            logger.info(f"評価が完了しました。実行時間: {self.evaluation_duration}秒、総リクエスト数: {request_count}")
+            logger.info(f"評価が完了しました。実行時間: {self.duration}秒、総リクエスト数: {request_count}")
 
             # パフォーマンスデータを保存
             self.save_performance_data()
