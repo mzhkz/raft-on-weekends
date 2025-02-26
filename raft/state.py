@@ -21,6 +21,8 @@ class State:
         self.statemachine = {}  # キーバリューストア
         self.commit_index = -1  # コミット済みの最新のログインデックス
         self.last_applied = -1  # ステートマシンに適用された最新のログインデックス
+
+        self.commit_event = None
         
         # リーダー専用の状態
         self.next_index = {}  # 各フォロワーに送信する次のログインデックス
@@ -119,32 +121,6 @@ class State:
             # logger.info(f"{self.node.name} starting election timer")
             self.election_timer.start()  # フォロワーの場合のみ選挙タイマーを開始
 
-        # リーダーの場合の処理
-        # while True:
-        #     await asyncio.sleep(5)  # 5秒ごとに実行
-            
-        #     if self.state == 'leader':
-        #         # ランダム値の生成
-        #         x = random.randint(1, 100)
-                
-        #         # 新しいログエントリを作成
-        #         entry = {
-        #             'term': self.current_term,
-        #             'command': {
-        #                 'type': 'set',
-        #                 'key': f'random_value',
-        #                 'value': x
-        #             },
-        #             "request_id": str(uuid.uuid4())
-        #         }
-                
-        #         # ログに追加
-        #         self.logs.append(entry)
-                
-        #         # 全フォロワーにログを複製
-        #         for node in self.node.cluster:
-        #             if not node.is_myself:  # 自分自身以外のノードに複製
-        #                 await self.replicate_log(node.name)
 
     async def send_heartbeat(self):
         """ハートビートを送信する"""
@@ -394,8 +370,14 @@ class State:
         }
         
         # リクエストを追跡するためにIDを保存
-        if request_id:
-            self.pending_requests[request_id] = client_id
+        self.pending_requests[request_id] = client_id
+
+        # 先の未コミットがあれば待つ
+        if self.commit_event:
+            await asyncio.wait_for(self.commit_event.wait())
+
+        # コミットイベントを作成
+        self.commit_event = asyncio.Event()
         
         # ログに追加
         self.logs.append(entry)
@@ -433,4 +415,6 @@ class State:
                     await client.send(response)
                     del self.pending_requests[request_id]
                 
-                # logger.info(f"{self.node.name} committed logs up to index {self.commit_index}")
+                # コミットイベントをリセット
+                if self.commit_event:
+                    self.commit_event.set()

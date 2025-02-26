@@ -48,7 +48,7 @@ def generate_docker_compose(num_nodes, client_nums, state_name):
         services[client_name] = {
             'build': '.',
             'container_name': client_name,
-            'command': ["python", "-m", "client.run_client", "--name", client_name, "--client", state_name],
+            'command': ["python", "-m", "evaluator.run_evaluator", "--name", client_name, "--evaluator", state_name],
             'ports': [f'{host_port}:8888/udp'],
             'networks': {
                 network_name: {

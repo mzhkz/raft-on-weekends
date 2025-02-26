@@ -11,10 +11,10 @@ services:
     command:
     - python
     - -m
-    - client.run_client
+    - evaluator.run_evaluator
     - --name
     - client1
-    - --client
+    - --evaluator
     - default
     container_name: client1
     depends_on:
