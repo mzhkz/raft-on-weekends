@@ -36,12 +36,15 @@ class CCAPerformanceEvaluator(PerformanceEvaluator):
     def handle_write_share_response(self, response):
         """シェアを受け取った時の処理"""
         request_id = response.get('request_id')
-        if request_id in self.granted_share_events and request_id in self.share_granted:
-            self.share_granted[request_id] += 1
-            if self.share_granted[request_id] > len(self.cluster_info.keys()) // 2:
-                if request_id in self.granted_share_events:
-                    self.granted_share_events[request_id].set()
-                    del self.share_granted[request_id]
+        if response.get('success'):
+            if request_id in self.granted_share_events and request_id in self.share_granted:
+                self.share_granted[request_id] += 1
+                if self.share_granted[request_id] > len(self.cluster_info.keys()) // 2:
+                    if request_id in self.granted_share_events:
+                        self.granted_share_events[request_id].set()
+                        del self.share_granted[request_id]
+        else:
+            logger.error(f"シェアを書き込めなかった: {request_id} {response.get('error')}")
 
     def handle_get_share_response(self, response):
         """シェアを受け取った時の処理"""
@@ -64,6 +67,8 @@ class CCAPerformanceEvaluator(PerformanceEvaluator):
                     # 読み込み成功数をインクリメント
                     self.successful_requests += 1
                     self.read_successful += 1
+        else:
+            logger.error(f"シェアを受け取れなかった: {request_id} {response.get('error')}")
 
     async def read(self, key, request_id):
         """ 読み込みリクエストを送信 """

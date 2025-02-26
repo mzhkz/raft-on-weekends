@@ -103,6 +103,8 @@ class PerformanceEvaluator:
                 if new_leader:
                     logger.info(f"リーダーを{new_leader}に変更します")
                     self.current_leader = new_leader
+            else:
+                logger.error(f"読み込みリクエストが失敗しました: {request_id} {response.get('error')}")
         else:
             # 読み込みリクエストの場合は、結果を保存して、read_eventを発火
             if request_id in self.read_events:
@@ -132,6 +134,7 @@ class PerformanceEvaluator:
                 if new_leader:
                     logger.info(f"リーダーを{new_leader}に変更します")
                     self.current_leader = new_leader
+            logger.error(f"書き込みリクエストが失敗しました: {request_id} {response.get('error')}")
         else:
             self.successful_requests += 1
             self.write_successful += 1
