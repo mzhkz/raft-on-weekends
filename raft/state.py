@@ -60,7 +60,7 @@ class State:
         self.voted_for = self.node.name
         self.received_votes = 1  # 自分への投票を含める
         
-        logger.info(f"Node {self.node.name} starting election for term {self.current_term}")
+        logger.info(f"{self.node.name} starting election for term {self.current_term}")
         
         # 投票要求を送信
         request = {
@@ -114,7 +114,6 @@ class State:
 
     async def start(self):
         """ノードの起動時の初期化処理"""
-        logger.info(f"{self.node.name} starting as {self.state}")
         self.init_timers()
         
         if self.state == 'follower':
@@ -347,7 +346,7 @@ class State:
         # logger.info(f"{self.node.name} received write request: {message}")
         if self.state != 'leader':
             # リーダーでない場合は、リーダーの情報をクライアントに返す
-            response = {
+            write_response = {
                 'type': 'ClientWriteResponse',
                 'success': False,
                 'error': 'not_leader',
@@ -355,7 +354,7 @@ class State:
                 "request_id": request_id
             }
             client = next(c for c in self.node.clients if c.name == client_id)
-            await client.send(response)
+            await client.send(write_response)
             return
 
         # 新しいログエントリを作成
@@ -374,7 +373,7 @@ class State:
 
         # 先の未コミットがあれば待つ
         if self.commit_event:
-            await asyncio.wait_for(self.commit_event.wait())
+            await self.commit_event.wait()
 
         # コミットイベントを作成
         self.commit_event = asyncio.Event()
@@ -401,6 +400,10 @@ class State:
             if replicated > len(self.node.cluster) // 2:
                 self.commit_index = n
                 await self.apply_logs()
+
+                 # コミットイベントをリセット
+                if self.commit_event:
+                    self.commit_event.set()
                 
                 # コミット完了後、関連するクライアントリクエストに応答
                 entry = self.logs[n]
@@ -411,10 +414,6 @@ class State:
                             'success': True,
                             'request_id': request_id
                         }
-                    client = next(c for c in self.node.clients if c.name == client_id)
-                    await client.send(response)
+                        client = next(c for c in self.node.clients if c.name == client_id)
+                        await client.send(response)
                     del self.pending_requests[request_id]
-                
-                # コミットイベントをリセット
-                if self.commit_event:
-                    self.commit_event.set()

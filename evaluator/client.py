@@ -33,7 +33,7 @@ class PerformanceEvaluator:
         
         self.load_node_portlist()
         
-        self.stats_timer = Timer(2, self.report_stats)  # 10秒間隔でパフォーマンス統計を報告
+        self.stats_timer = Timer(1, self.report_stats)  # 1秒間隔でパフォーマンス統計を報告
 
         logger.info(f"PerformanceEvaluator {self.name} initialized")
         
@@ -50,7 +50,7 @@ class PerformanceEvaluator:
         """ クライアントを接続 """
 
         loop = asyncio.get_event_loop()
-        self.protocol = ClientUDPProtocol(None, self.handle_response, self)
+        self.protocol = ClientUDPProtocol(self.handle_response, self)
         self.transport, _ = await loop.create_datagram_endpoint(
             lambda: self.protocol,
             local_addr=('0.0.0.0', 8888)
@@ -67,13 +67,6 @@ class PerformanceEvaluator:
 
         request_id = response.get('request_id')
 
-        # リクエスト完了時間を計算
-        if request_id in self.start_times:
-            start_time = self.start_times[request_id]
-            latency = asyncio.get_event_loop().time() - start_time
-            self.total_latency += latency
-            del self.start_times[request_id]
-
         if not response.get('success'):
             # リーダーでない場合、新しいリーダーに接続
             if response.get('error') == 'not_leader':
@@ -89,6 +82,16 @@ class PerformanceEvaluator:
 
     def handle_write_response(self, response):
         """ 書き込みリクエストのレスポンスを処理 """
+        request_id = response.get('request_id')
+        
+        # リクエスト完了時間を計算
+        if request_id in self.start_times:
+            start_time = self.start_times[request_id]
+            latency = asyncio.get_event_loop().time() - start_time
+            self.total_latency += latency
+            del self.start_times[request_id]
+        else:
+            logger.warning(f"未知のリクエストID: {request_id}")
 
         if not response.get('success'):
             # リーダーでない場合、新しいリーダーに接続
@@ -97,7 +100,6 @@ class PerformanceEvaluator:
                 if new_leader:
                     logger.info(f"リーダーを{new_leader}に変更します")
                     self.current_leader = new_leader
-                    
         else:
             self.successful_requests += 1
                 
@@ -176,7 +178,10 @@ class PerformanceEvaluator:
         self.start_time = asyncio.get_event_loop().time()
 
     async def run(self):
-        await asyncio.sleep(1)
+        """ 評価を実行 """
+
+        # 1秒待ってから接続
+        await asyncio.sleep(1.5)
         await self.connect()
         self.start_time = asyncio.get_event_loop().time()
         self.stats_timer.start()  # 統計タイマーを開始
@@ -186,6 +191,7 @@ class PerformanceEvaluator:
                 try:
                     value = 23
                     await self.write('token', value)
+                    await asyncio.sleep(0.001)
                 except Exception as e:
                     logger.error(f"エラーが発生しました: {e}")
         finally:

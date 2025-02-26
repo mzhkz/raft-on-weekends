@@ -11,7 +11,7 @@ def getEvaluatorClass(evaluator_name):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--name', default='client1')
-    parser.add_argument('--client', default='default')
+    parser.add_argument('--evaluator', default='default')
     args = parser.parse_args()
 
     evaluator = getEvaluatorClass(args.evaluator)(args.name)
