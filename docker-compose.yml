@@ -15,7 +15,7 @@ services:
     - --name
     - client1
     - --evaluator
-    - opt_cca
+    - default
     - --duration
     - '5'
     - --requests_per_second
@@ -50,7 +50,7 @@ services:
     - --clients
     - client1
     - --state
-    - opt_cca
+    - default
     - --duration
     - '5'
     container_name: node1
@@ -81,7 +81,7 @@ services:
     - --clients
     - client1
     - --state
-    - opt_cca
+    - default
     - --duration
     - '5'
     container_name: node2
@@ -112,7 +112,7 @@ services:
     - --clients
     - client1
     - --state
-    - opt_cca
+    - default
     - --duration
     - '5'
     container_name: node3

@@ -42,7 +42,7 @@ class OptCCAState:
 
         self.garbage_collection_timer = None
 
-        logger.info(f"OptCCAState {self.node.name} initialized")
+        logger.info(f"CCAState {self.node.name} initialized")
 
 
 
@@ -62,10 +62,10 @@ class OptCCAState:
 
 
         # 古いバケットを削除するタイマー
-        self.garbage_collection_timer = Timer(
-            interval=10,
-            callback=self.garbage_collection
-        )
+        # self.garbage_collection_timer = Timer(
+        #     interval=10,
+        #     callback=self.garbage_collection
+        # )
 
     async def start_election(self):
         """選挙を開始する"""
@@ -299,7 +299,6 @@ class OptCCAState:
 
                     # バケットが存在するか
                     for entry in message['entries']:
-                        # フォロワーに読み込みロックをかける
                         self.read_locks[entry['command']['key']] = asyncio.Event()
                         bucket_id = entry['command']['bucket_id']
                         # バケットが存在しない場合は、バケットが作成されるまで待つ
@@ -346,9 +345,8 @@ class OptCCAState:
 
     async def handle_client_write(self, message):
         """クライアントからのWrite要求を処理する"""
-        client_id = message.get('sender')
-        request_id = message.get('request_id', str(uuid.uuid4()))
-        # logger.info(f"{self.node.name} received write request: {message}")
+        client_id = message['sender']
+        request_id = message['request_id']
         if self.state != 'leader':
             # リーダーでない場合は、リーダーの情報をクライアントに返す
             response = {
@@ -362,7 +360,6 @@ class OptCCAState:
             await client.send(response)
             return
         
-
         # writeShareと統合する
         shares = message.get('shares')
         bucket_id = request_id # バケットIDはリクエストIDと同じ
@@ -387,9 +384,10 @@ class OptCCAState:
             "request_id": request_id
         }
         
+        
         # リクエストを追跡するためにIDを保存
         self.pending_requests[request_id] = client_id
-        
+
         # コミットイベントを作成
         if self.commit_event:
             await self.commit_event.wait()
@@ -398,7 +396,7 @@ class OptCCAState:
         # ログに追加
         self.logs.append(entry)
 
-        # 読み込みロックをかける
+        # 書き込むキーへの読み込みをロック
         self.read_locks[message['key']] = asyncio.Event()
         
         # 全フォロワーにログを複製
@@ -412,6 +410,7 @@ class OptCCAState:
         client_id = message['sender']
         request_id = message['request_id']
         shares = message['shares']
+        
         bucket_id = request_id # バケットIDはリクエストIDと同じ
         bucket = {
             'shares': shares,
@@ -421,7 +420,8 @@ class OptCCAState:
         }
         self.share_buckets[bucket_id] = bucket
 
-        # バケット待ちがあれば、取得できたことを通知 (おもにFollowerだったときにAppendEntriesが先に来て、クライアントからのWriteShareが来るときに、バケットが作成されるまで待つ)
+        # バケットが作成されたら、バケットを取得
+        # もしtimeoutしていたら、bucketはガベージコレクションされる。
         if self.bucket_events.get(bucket_id):
             self.bucket_events[bucket_id].set()
 
@@ -451,7 +451,6 @@ class OptCCAState:
         bucket = self.share_buckets.get(bucket_id)
 
         
-
         # バケットが存在しない場合はエラー
         if not bucket:
             response = {
@@ -490,7 +489,6 @@ class OptCCAState:
                 self.commit_index = n
                 await self.apply_logs()
 
-                # コミットイベントをリセット
                 if self.commit_event:
                     self.commit_event.set()
                 

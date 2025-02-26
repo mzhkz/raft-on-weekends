@@ -316,8 +316,8 @@ class PerformanceEvaluator:
         try:
             request_count = 0
             while asyncio.get_event_loop().time() < end_time:
+                request_start = asyncio.get_event_loop().time()
                 try:
-                    request_start = asyncio.get_event_loop().time()
                     request_count += 1
                     
                     # ランダムなキーを選択
@@ -331,12 +331,14 @@ class PerformanceEvaluator:
                         # 読み込み操作
                         await self.read(key)
                     
-                    # 次のリクエストまでの時間を計算（固定間隔ではなく、処理時間を考慮）
-                    elapsed = asyncio.get_event_loop().time() - request_start
-                    sleep_time = max(0.001, interval - elapsed)
-                    await asyncio.sleep(sleep_time)
                 except Exception as e:
                     logger.error(f"エラーが発生しました: {e}")
+
+                 # 次のリクエストまでの時間を計算（固定間隔ではなく、処理時間を考慮）
+                elapsed = asyncio.get_event_loop().time() - request_start
+                sleep_time = max(0, interval - elapsed)
+                await asyncio.sleep(0.55e-3 + sleep_time)
+
             
             # 評価終了メッセージ
             logger.info(f"評価が完了しました。実行時間: {self.duration}秒、総リクエスト数: {request_count}")
