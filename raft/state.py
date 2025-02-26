@@ -416,4 +416,4 @@ class State:
                         }
                         client = next(c for c in self.node.clients if c.name == client_id)
                         await client.send(response)
-                    del self.pending_requests[request_id]
+                        del self.pending_requests[request_id]

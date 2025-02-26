@@ -24,6 +24,8 @@ class OState:
         self.statemachine = {}  # キーバリューストア
         self.commit_index = -1  # コミット済みの最新のログインデックス
         self.last_applied = -1  # ステートマシンに適用された最新のログインデックス
+
+        self.commit_event = None
         
         # リーダー専用の状態
         self.next_index = {}  # 各フォロワーに送信する次のログインデックス
@@ -399,8 +401,13 @@ class OState:
 
         
         # リクエストを追跡するためにIDを保存
-        if request_id:
-            self.pending_requests[request_id] = client_id
+        
+        self.pending_requests[request_id] = client_id
+
+        # コミットイベントを作成
+        if self.commit_event:
+            await self.commit_event.wait()
+        self.commit_event = asyncio.Event()
         
         # ログに追加
         self.logs.append(entry)
@@ -424,6 +431,10 @@ class OState:
             if replicated > len(self.node.cluster) // 2:
                 self.commit_index = n
                 await self.apply_logs()
+
+                # コミットイベントをリセット
+                if self.commit_event:
+                    self.commit_event.set()
                 
                 # コミット完了後、関連するクライアントリクエストに応答
                 entry = self.logs[n]
@@ -434,8 +445,8 @@ class OState:
                             'success': True,
                             'request_id': request_id
                         }
-                    client = next(c for c in self.node.clients if c.name == client_id)
-                    await client.send(response)
-                    del self.pending_requests[request_id]
+                        client = next(c for c in self.node.clients if c.name == client_id)
+                        await client.send(response)
+                        del self.pending_requests[request_id]
                 
                 # logger.info(f"{self.node.name} committed logs up to index {self.commit_index}")
