@@ -386,7 +386,7 @@ class CCAState:
                 del self.bucket_events[request_id]
 
 
-        bucket = self.share_buckets["request_id"]
+        bucket = self.share_buckets[request_id]
         
         # 新しいログエントリを作成
         entry = {
@@ -426,6 +426,7 @@ class CCAState:
         client_id = message['sender']
         request_id = message['request_id']
         shares = message['shares']
+        
         bucket_id = request_id # バケットIDはリクエストIDと同じ
         bucket = {
             'shares': shares,

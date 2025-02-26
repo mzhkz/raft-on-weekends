@@ -86,7 +86,7 @@ services:
     - --state
     - cca
     - --duration
-    - '4'
+    - '20'
     container_name: node1
     environment:
     - NODE=node1
@@ -116,7 +116,7 @@ services:
     - --state
     - cca
     - --duration
-    - '4'
+    - '20'
     container_name: node2
     environment:
     - NODE=node2
@@ -146,7 +146,7 @@ services:
     - --state
     - cca
     - --duration
-    - '4'
+    - '20'
     container_name: node3
     environment:
     - NODE=node3
