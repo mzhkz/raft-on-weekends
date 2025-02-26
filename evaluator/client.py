@@ -245,13 +245,13 @@ class PerformanceEvaluator:
                 書き込み:
                   スループット: {write_throughput:.2f} req/sec
                   平均レイテンシ: {write_avg_latency * 1000:.3f} msec
-                  成功率: {write_success_rate:.1f}%
+                  処理完了率: {write_success_rate:.1f}%
                   リクエスト数: {self.write_requests}
                   成功数: {self.write_successful}
                 読み込み:
                   スループット: {read_throughput:.2f} req/sec
                   平均レイテンシ: {read_avg_latency * 1000:.3f} msec
-                  成功率: {read_success_rate:.1f}%
+                  処理完了率: {read_success_rate:.1f}%
                   リクエスト数: {self.read_requests}
                   成功数: {self.read_successful}
                 Evaluator: {self.__class__.__name__}
@@ -333,7 +333,7 @@ class PerformanceEvaluator:
                     
                     # 次のリクエストまでの時間を計算（固定間隔ではなく、処理時間を考慮）
                     elapsed = asyncio.get_event_loop().time() - request_start
-                    sleep_time = max(0, interval - elapsed)
+                    sleep_time = max(0.001, interval - elapsed)
                     await asyncio.sleep(sleep_time)
                 except Exception as e:
                     logger.error(f"エラーが発生しました: {e}")

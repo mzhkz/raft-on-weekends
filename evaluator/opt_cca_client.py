@@ -8,7 +8,7 @@ from raft.timer import Timer
 
 from client.network import ClientUDPProtocol
 from evaluator.client import PerformanceEvaluator
-
+from evaluator.cca_client import CCAPerformanceEvaluator
 from crypto.VSS import split, combine
 from crypto.parameters import TEST_PARAMS
 
@@ -16,11 +16,6 @@ class OptCCAPerformanceEvaluator(PerformanceEvaluator):
     def __init__(self, name, duration, requests_per_second, write_ratio, key_range):
         super().__init__(name, duration, requests_per_second, write_ratio, key_range)
         
-       # cca client用の変数
-        self.granted_share_events = {}
-        self.share_granted = {}
-        
-        logger.info(f"OptCCAPerformanceEvaluator {self.name} initialized")
 
     def handle_response(self, response):
         request_id = response.get('request_id')
@@ -35,13 +30,7 @@ class OptCCAPerformanceEvaluator(PerformanceEvaluator):
 
     def handle_write_share_response(self, response):
         """シェアを受け取った時の処理"""
-        request_id = response.get('request_id')
-        if request_id in self.granted_share_events and request_id in self.share_granted:
-            self.share_granted[request_id] += 1
-            if self.share_granted[request_id] > len(self.cluster_info.keys()) // 2:
-                if request_id in self.granted_share_events:
-                    self.granted_share_events[request_id].set()
-                    del self.share_granted[request_id]
+        pass
 
     def handle_get_share_response(self, response):
         """シェアを受け取った時の処理"""
@@ -61,8 +50,13 @@ class OptCCAPerformanceEvaluator(PerformanceEvaluator):
                         total_shares.extend(result)
                     self.read_results[request_id] = total_shares
                     self.read_events[request_id].set()
+                    # 読み込み成功数をインクリメント
+                    self.successful_requests += 1
+                    self.read_successful += 1
+        else:
+            logger.error(f"シェアを受け取れなかった: {request_id} {response.get('error')}")
 
-    async def read(self, key, request_id):
+    async def read_handler(self, key, request_id):
         """ 読み込みリクエストを送信 """
         self.read_events[request_id] = asyncio.Event()
 
@@ -95,33 +89,20 @@ class OptCCAPerformanceEvaluator(PerformanceEvaluator):
         shares = result["shares"]
         commitments = result["commitments"]
 
-        self.granted_share_events[request_id] = asyncio.Event()
-        self.share_granted[request_id] = 0
-
         for node_name in self.cluster_info.keys():
-            node_index = list(self.cluster_info.keys()).index(node_name)
-            shares_copy = shares.copy()
-            shares_copy.pop(node_index)
-            request = {
-                'type': 'ClientWriteShare',
-                'shares': shares, ## 擬似的なシェア分配
-                'request_id': request_id,
-            }
-            await self.send_request({"data": request}, node_name)
-
-        # シェアが揃ったら、コミットを実行
-        try:
-            await asyncio.wait_for(self.granted_share_events[request_id].wait(), timeout=5.0)
-            del self.granted_share_events[request_id]
-        except asyncio.TimeoutError:
-            logger.error(f"シェアが揃わないままタイムアウトしました: {request_id}")
-            del self.granted_share_events[request_id]
-            return False
+            if node_name != self.current_leader:
+                request = {
+                    'type': 'ClientWriteShare',
+                    'shares': shares,
+                    'request_id': request_id,
+                }
+                await self.send_request({"data": request}, node_name)
         
         request = {
             'type': 'ClientWrite',
             'key': key,
             'commitments': commitments,
+            'shares': shares,
             'request_id': request_id,
         }
         

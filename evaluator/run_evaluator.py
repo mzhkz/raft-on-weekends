@@ -12,6 +12,8 @@ def getEvaluatorClass(evaluator_name):
         return CCAPerformanceEvaluator
     elif evaluator_name == 'opt_cca':
         return OptCCAPerformanceEvaluator
+    else:
+        raise ValueError(f"Invalid evaluator name: {evaluator_name}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

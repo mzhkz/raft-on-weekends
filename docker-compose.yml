@@ -15,9 +15,9 @@ services:
     - --name
     - client1
     - --evaluator
-    - cca
+    - opt_cca
     - --duration
-    - '4'
+    - '5'
     - --requests_per_second
     - '1000'
     - --write_ratio
@@ -35,64 +35,6 @@ services:
     - 5558:8888/udp
     volumes:
     - ./dump:/app/dump
-  client2:
-    build: .
-    command:
-    - python
-    - -m
-    - evaluator.run_evaluator
-    - --name
-    - client2
-    - --evaluator
-    - cca
-    - --duration
-    - '4'
-    - --requests_per_second
-    - '1000'
-    - --write_ratio
-    - '1.0'
-    - --key_range
-    - '10'
-    container_name: client2
-    depends_on:
-      node3:
-        condition: service_started
-    networks:
-      raft-common-network:
-        ipv4_address: 10.0.0.6
-    ports:
-    - 5559:8888/udp
-    volumes:
-    - ./dump:/app/dump
-  client3:
-    build: .
-    command:
-    - python
-    - -m
-    - evaluator.run_evaluator
-    - --name
-    - client3
-    - --evaluator
-    - cca
-    - --duration
-    - '4'
-    - --requests_per_second
-    - '1000'
-    - --write_ratio
-    - '1.0'
-    - --key_range
-    - '10'
-    container_name: client3
-    depends_on:
-      node3:
-        condition: service_started
-    networks:
-      raft-common-network:
-        ipv4_address: 10.0.0.7
-    ports:
-    - 5560:8888/udp
-    volumes:
-    - ./dump:/app/dump
   node1:
     build: .
     command:
@@ -106,21 +48,22 @@ services:
     - --name
     - node1
     - --clients
-    - client1,client2,client3
+    - client1
     - --state
-    - cca
+    - opt_cca
     - --duration
-    - '4'
+    - '5'
     container_name: node1
     environment:
     - NODE=node1
     - CLUSTER=node2,node3
-    - CLIENTS=client1,client2,client3
+    - CLIENTS=client1
     networks:
       raft-common-network:
         ipv4_address: 10.0.0.2
     ports:
     - 3333:8080/udp
+    sysctls: {}
     volumes:
     - ./dump:/app/dump
   node2:
@@ -136,21 +79,22 @@ services:
     - --name
     - node2
     - --clients
-    - client1,client2,client3
+    - client1
     - --state
-    - cca
+    - opt_cca
     - --duration
-    - '4'
+    - '5'
     container_name: node2
     environment:
     - NODE=node2
     - CLUSTER=node1,node3
-    - CLIENTS=client1,client2,client3
+    - CLIENTS=client1
     networks:
       raft-common-network:
         ipv4_address: 10.0.0.3
     ports:
     - 3334:8080/udp
+    sysctls: {}
     volumes:
     - ./dump:/app/dump
   node3:
@@ -166,21 +110,22 @@ services:
     - --name
     - node3
     - --clients
-    - client1,client2,client3
+    - client1
     - --state
-    - cca
+    - opt_cca
     - --duration
-    - '4'
+    - '5'
     container_name: node3
     environment:
     - NODE=node3
     - CLUSTER=node1,node2
-    - CLIENTS=client1,client2,client3
+    - CLIENTS=client1
     networks:
       raft-common-network:
         ipv4_address: 10.0.0.4
     ports:
     - 3335:8080/udp
+    sysctls: {}
     volumes:
     - ./dump:/app/dump
 version: '3.8'

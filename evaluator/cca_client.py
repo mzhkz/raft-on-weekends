@@ -70,7 +70,7 @@ class CCAPerformanceEvaluator(PerformanceEvaluator):
         else:
             logger.error(f"シェアを受け取れなかった: {request_id} {response.get('error')}")
 
-    async def read(self, key, request_id):
+    async def read_handler(self, key, request_id):
         """ 読み込みリクエストを送信 """
         self.read_events[request_id] = asyncio.Event()
 

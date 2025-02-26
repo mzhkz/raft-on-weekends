@@ -41,7 +41,18 @@ def generate_docker_compose(num_nodes, client_nums, state_name, evaluator_config
                     'ipv4_address': ipv4_address
                 }
             },
-            'volumes': [f'./dump:/app/dump']
+            'volumes': [f'./dump:/app/dump'],
+            "sysctls": {
+                # "net.inet.udp.maxdgram": 65536,
+                # "net.inet.udp.recvspace": 65536,
+                # "net.inet.udp.sendspace": 65536,
+                # "net.inet.udp.maxdgram": 65536,
+                # "net.inet.udp.recvspace": 65536,
+                # "net.inet.udp.sendspace": 65536,
+                # "net.inet.udp.maxdgram": 65536,
+                # "net.inet.udp.recvspace": 65536,
+                # "net.inet.udp.sendspace": 65536,
+            }
         }
         node_portlist[node_name] = {
             'host': ipv4_address,

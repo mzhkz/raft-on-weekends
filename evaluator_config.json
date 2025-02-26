@@ -1,5 +1,5 @@
 {
-	"duration": 4,
+	"duration": 5,
 	"requests_per_second": 1000,
 	"write_ratio": 1.0,
 	"key_range": 10
