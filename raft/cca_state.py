@@ -502,7 +502,8 @@ class CCAState:
                 self.commit_index = n
                 await self.apply_logs()
 
-                # コミットイベントをリセット
+                if self.commit_event:
+                    self.commit_event.set()
                 
                 # コミット完了後、関連するクライアントリクエストに応答
                 entry = self.logs[n]

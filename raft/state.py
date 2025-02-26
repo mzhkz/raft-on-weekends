@@ -401,10 +401,9 @@ class State:
                 self.commit_index = n
                 await self.apply_logs()
 
-                 # コミットイベントをリセット
                 if self.commit_event:
                     self.commit_event.set()
-                
+            
                 # コミット完了後、関連するクライアントリクエストに応答
                 entry = self.logs[n]
                 for request_id, client_id in list(self.pending_requests.items()):
