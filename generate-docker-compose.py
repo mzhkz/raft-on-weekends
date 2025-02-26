@@ -56,7 +56,8 @@ def generate_docker_compose(num_nodes, client_nums, state_name, evaluator_config
         services[client_name] = {
             'build': '.',
             'container_name': client_name,
-            'command': ["python", "-m", "evaluator.run_evaluator", "--name", client_name, "--evaluator", state_name, "--duration", str(evaluator_config['duration']), "--requests_per_second", str(evaluator_config['requests_per_second']), "--write_ratio", str(evaluator_config['write_ratio']), "--key_range", str(evaluator_config['key_range'])],
+            # 'command': ["python", "-m", "evaluator.run_evaluator", "--name", client_name, "--evaluator", state_name, "--duration", str(evaluator_config['duration']), "--requests_per_second", str(evaluator_config['requests_per_second']), "--write_ratio", str(evaluator_config['write_ratio']), "--key_range", str(evaluator_config['key_range'])],
+            'command': ["python", "-m", "client.run_client", "--name", client_name, "--client", state_name],
             'ports': [f'{host_port}:8888/udp'],
             'networks': {
                 network_name: {

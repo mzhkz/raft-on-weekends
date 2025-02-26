@@ -349,8 +349,8 @@ class CCAState:
 
     async def handle_client_write(self, message):
         """クライアントからのWrite要求を処理する"""
-        client_id = message.get('sender')
-        request_id = message.get('request_id', str(uuid.uuid4()))
+        client_id = message['sender']
+        request_id = message['request_id']
         if self.state != 'leader':
             # リーダーでない場合は、リーダーの情報をクライアントに返す
             response = {
@@ -364,7 +364,7 @@ class CCAState:
             await client.send(response)
             return
         
-        bucket = self.share_buckets.get(request_id)
+        bucket = self.share_buckets.get(request_id, None)
         # バケットが存在しない場合は、バケットが作成されるまで待つ
         if not bucket:
             self.bucket_events[request_id] = asyncio.Event()
@@ -384,6 +384,9 @@ class CCAState:
                 await client.send(response)
             finally:
                 del self.bucket_events[request_id]
+
+
+        bucket = self.share_buckets["request_id"]
         
         # 新しいログエントリを作成
         entry = {
@@ -420,9 +423,9 @@ class CCAState:
 
     async def handle_client_write_share(self, message):
         """クライアントからのWrite要求を処理する"""
-        client_id = message.get('sender')
-        request_id = message.get('request_id', str(uuid.uuid4()))
-        shares = message.get('shares')
+        client_id = message['sender']
+        request_id = message['request_id']
+        shares = message['shares']
         bucket_id = request_id # バケットIDはリクエストIDと同じ
         bucket = {
             'shares': shares,
@@ -448,11 +451,11 @@ class CCAState:
 
     async def handle_client_get_share(self, message):
         """クライアントからのGetShare要求を処理する"""
-        client_id = message.get('sender')
-        request_id = message.get('request_id', str(uuid.uuid4()))
+        client_id = message['sender']
+        request_id = message['request_id']
 
         # キーからバケットIDを取得
-        key = message.get('key')
+        key = message['key']
 
         # 読み取りロックがかかっていれば、ロックが解除されるまで待つ
         if self.read_locks.get(key):

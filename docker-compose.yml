@@ -11,19 +11,11 @@ services:
     command:
     - python
     - -m
-    - evaluator.run_evaluator
+    - client.run_client
     - --name
     - client1
-    - --evaluator
+    - --client
     - cca
-    - --duration
-    - '4'
-    - --requests_per_second
-    - '1000'
-    - --write_ratio
-    - '1.0'
-    - --key_range
-    - '10'
     container_name: client1
     depends_on:
       node3:
@@ -40,19 +32,11 @@ services:
     command:
     - python
     - -m
-    - evaluator.run_evaluator
+    - client.run_client
     - --name
     - client2
-    - --evaluator
+    - --client
     - cca
-    - --duration
-    - '4'
-    - --requests_per_second
-    - '1000'
-    - --write_ratio
-    - '1.0'
-    - --key_range
-    - '10'
     container_name: client2
     depends_on:
       node3:
@@ -69,19 +53,11 @@ services:
     command:
     - python
     - -m
-    - evaluator.run_evaluator
+    - client.run_client
     - --name
     - client3
-    - --evaluator
+    - --client
     - cca
-    - --duration
-    - '4'
-    - --requests_per_second
-    - '1000'
-    - --write_ratio
-    - '1.0'
-    - --key_range
-    - '10'
     container_name: client3
     depends_on:
       node3:

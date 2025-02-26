@@ -310,11 +310,11 @@ class State:
 
     async def handle_client_read(self, message):
         """クライアントからのRead要求を処理する"""
-        client_id = message.get('sender')
-        request_id = message.get('request_id', str(uuid.uuid4()))
+        client_id = message['sender']
+        request_id = message['request_id']
 
         # キーからバケットIDを取得
-        key = message.get('key')
+        key = message['key']
         # キーが存在しない場合はエラー
         if not self.statemachine.get(key):
             response = {
@@ -341,8 +341,8 @@ class State:
 
     async def handle_client_write(self, message):
         """クライアントからのWrite要求を処理する"""
-        client_id = message.get('sender')
-        request_id = message.get('request_id', str(uuid.uuid4()))
+        client_id = message['sender']
+        request_id = message['request_id']
         # logger.info(f"{self.node.name} received write request: {message}")
         if self.state != 'leader':
             # リーダーでない場合は、リーダーの情報をクライアントに返す

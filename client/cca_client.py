@@ -48,7 +48,7 @@ class CCAPerformanceEvaluator:
 
     async def connect(self):
         loop = asyncio.get_event_loop()
-        self.protocol = ClientUDPProtocol(self.commit_events, self.handle_response, self)
+        self.protocol = ClientUDPProtocol(self.handle_response, self)
         self.transport, _ = await loop.create_datagram_endpoint(
             lambda: self.protocol,
             local_addr=('0.0.0.0', 8888)
