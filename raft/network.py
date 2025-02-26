@@ -28,10 +28,10 @@ class BaseUDPProtocol(asyncio.DatagramProtocol):
         asyncio.ensure_future(self.start(), loop=self.loop)
 
     def error_received(self, exc):
-        logger.error('Error received:', exc)
+        logger.error('Error received: ' + str(exc))
 
     def connection_lost(self, exc):
-        logger.warning('Connection lost:', exc)
+        logger.warning('Connection lost:')
 
 class NodeUDPProtocol(BaseUDPProtocol):
     def datagram_received(self, data, addr):

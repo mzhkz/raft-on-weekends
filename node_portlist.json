@@ -18,5 +18,15 @@
         "host": "10.0.0.5",
         "export_port": 5558,
         "internal_port": 8888
+    },
+    "client2": {
+        "host": "10.0.0.6",
+        "export_port": 5559,
+        "internal_port": 8888
+    },
+    "client3": {
+        "host": "10.0.0.7",
+        "export_port": 5560,
+        "internal_port": 8888
     }
 }

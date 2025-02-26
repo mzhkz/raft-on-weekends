@@ -2,7 +2,15 @@ import sys
 import yaml
 import json
 
-def generate_docker_compose(num_nodes, client_nums, state_name):
+def generate_docker_compose(num_nodes, client_nums, state_name, evaluator_config):
+    """ ドッカーコンポーズファイルを生成 """
+    """
+    num_nodes: ノードの数
+    client_nums: クライアントの数
+    state_name: ステートの名前
+    evaluator_config: 評価の設定
+    """
+
     services = {}
     network_name = 'raft-common-network'
     
@@ -27,7 +35,7 @@ def generate_docker_compose(num_nodes, client_nums, state_name):
                 f'CLIENTS={clients}'
             ],
             'ports': [f'{host_port}:8080/udp'],
-            'command': ["python", "-m", "raft.run_node", "--node", ipv4_address, "--cluster", cluster, "--name", node_name, "--clients", clients, "--state", state_name],
+            'command': ["python", "-m", "raft.run_node", "--node", ipv4_address, "--cluster", cluster, "--name", node_name, "--clients", clients, "--state", state_name, "--duration", str(evaluator_config['duration'])],
             'networks': {
                 network_name: {
                     'ipv4_address': ipv4_address
@@ -48,7 +56,7 @@ def generate_docker_compose(num_nodes, client_nums, state_name):
         services[client_name] = {
             'build': '.',
             'container_name': client_name,
-            'command': ["python", "-m", "evaluator.run_evaluator", "--name", client_name, "--evaluator", state_name],
+            'command': ["python", "-m", "evaluator.run_evaluator", "--name", client_name, "--evaluator", state_name, "--duration", str(evaluator_config['duration']), "--requests_per_second", str(evaluator_config['requests_per_second']), "--write_ratio", str(evaluator_config['write_ratio']), "--key_range", str(evaluator_config['key_range'])],
             'ports': [f'{host_port}:8888/udp'],
             'networks': {
                 network_name: {
@@ -100,6 +108,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     try:
+        with open('evaluator_config.json', 'r') as file:
+            evaluator_config = json.load(file)
         num_nodes = int(sys.argv[1])
         if num_nodes < 1 or num_nodes > 253:
             raise ValueError
@@ -107,7 +117,7 @@ if __name__ == '__main__':
         if num_clients < 1 or num_clients > 253:
             raise ValueError
         state_name = sys.argv[3]
-        generate_docker_compose(num_nodes, num_clients, state_name)
+        generate_docker_compose(num_nodes, num_clients, state_name, evaluator_config)
     except ValueError:
         print("Please provide a valid integer for the number of nodes (< 254) and clients (< 254).")
         sys.exit(1)

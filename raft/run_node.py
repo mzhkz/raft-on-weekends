@@ -11,6 +11,7 @@ if __name__ == '__main__':
     parser.add_argument('--clients')
     parser.add_argument('--name')
     parser.add_argument('--state')
+    parser.add_argument('--duration', default=4)
     args = parser.parse_args()
 
     # 自分のノードのアドレス
@@ -25,4 +26,13 @@ if __name__ == '__main__':
     loop.create_task(register_as_server_node(names=[name], loop=loop, state_name=args.state))
     loop.create_task(register_as_client_node(names=args.cluster.split(','), loop=loop, state_name=args.state))
     loop.create_task(register_as_raft_client(names=args.clients.split(','), loop=loop))
+    
+    # 5秒後にループを停止する
+    async def stop_after_5_seconds():
+        duration = int(args.duration) * 2
+        await asyncio.sleep(duration) # 評価時間の2倍
+        loop.stop()
+        print(f"{duration}秒経過したため、プログラムを停止します")
+    
+    loop.create_task(stop_after_5_seconds())
     loop.run_forever()

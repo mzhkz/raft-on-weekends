@@ -10,8 +10,15 @@ from raft.timer import Timer
 from client.network import ClientUDPProtocol
 
 class PerformanceEvaluator:
-    def __init__(self, name):
+    def __init__(self, name, duration, requests_per_second, write_ratio, key_range):
+        # 評価の設定
         self.name = name
+        self.duration = duration
+        self.requests_per_second = requests_per_second
+        self.write_ratio = write_ratio
+        self.key_range = key_range
+
+        # Raft処理用
         self.commit_events = {}
         self.read_events = {}
         self.current_leader = 'node1'  # デフォルトのリーダー
@@ -20,12 +27,11 @@ class PerformanceEvaluator:
         self.protocol = None
         self.node_host_port = {}
         self.read_results = {}
+
         # パフォーマンス測定用の変数を追加
         self.total_requests = 0
         self.successful_requests = 0
         self.total_latency = 0
-        
-        # 読み込みと書き込みを分けて測定するための変数
         self.write_requests = 0
         self.write_successful = 0
         self.write_latency = 0
@@ -39,11 +45,14 @@ class PerformanceEvaluator:
         # リクエスト開始時間を保存する辞書
         self.start_times = {}
 
+        # パフォーマンスデータを保存するリスト
         self.performance_data = []
+
         
+        # ノードのポートリストを読み込む
         self.load_node_portlist()
         
-        self.stats_timer = Timer(1, self.report_stats)  # 1秒間隔でパフォーマンス統計を報告
+        # 1秒間隔でパフォーマンス統計を報告するタイマー
 
         logger.info(f"PerformanceEvaluator {self.name} initialized")
         
@@ -128,30 +137,24 @@ class PerformanceEvaluator:
             self.write_successful += 1
                 
 
-    async def send_request(self, request):
-        leader_node = self.current_leader
-        leader_ip = self.node_host_port[leader_node]['host']
-        leader_port = self.node_host_port[leader_node]['internal_port']
+    async def send_request_to_leader(self, request):
+        await self.send_request(request, self.current_leader)
+
+    async def send_request(self, request, target_node):
+        target_ip = self.node_host_port[target_node]['host']
+        target_port = self.node_host_port[target_node]['internal_port']
         data = MessagePackSerializer.pack(request)
-        self.transport.sendto(data, (leader_ip, leader_port))
+        self.transport.sendto(data, (target_ip, target_port))
 
     async def read(self, key):
         """ 読み込みリクエストを送信 """
-
+         # リクエスト数をインクリメント 
+        self.total_requests += 1
+        self.read_requests += 1
         request_id = str(uuid.uuid4())
         self.read_events[request_id] = asyncio.Event()
         self.start_times[request_id] = asyncio.get_event_loop().time()
-
-        request = {
-            'type': 'ClientRead',
-            'key': key,
-            'request_id': request_id,
-        }
-        await self.send_request({"data": request})
-        
-        # リクエスト数をインクリメント
-        self.total_requests += 1
-        self.read_requests += 1
+        await self.read_handler(key, request_id)
 
         # リーダーからのレスポンスを待つ
         try:
@@ -168,9 +171,27 @@ class PerformanceEvaluator:
 
     async def write(self, key, value):
         """ 書き込みリクエストを送信 """
-
+        # リクエスト数をインクリメント
+        self.total_requests += 1
+        self.write_requests += 1
         request_id = str(uuid.uuid4())
         self.start_times[request_id] = asyncio.get_event_loop().time()
+        await self.write_handler(key, value, request_id)
+
+    async def read_handler(self, key, request_id):
+        """ 読み込みリクエストを送信 """
+
+        request = {
+            'type': 'ClientRead',
+            'key': key,
+            'request_id': request_id,
+        }
+        await self.send_request_to_leader({"data": request})
+
+
+    async def write_handler(self, key, value, request_id):
+        """ 書き込みリクエストを送信 """
+
         # リクエストを作成
         request = {
             'type': 'ClientWrite',
@@ -180,19 +201,11 @@ class PerformanceEvaluator:
         }
             
         # リクエストを送信
-        await self.send_request({"data": request})
-        # リクエスト数をインクリメント
-        self.total_requests += 1
-        self.write_requests += 1
+        await self.send_request_to_leader({"data": request})
 
     async def report_stats(self):
         """パフォーマンス統計を報告するコールバック関数"""
         elapsed_time = asyncio.get_event_loop().time() - self.start_time
-        
-        # 全体の統計
-        throughput = self.successful_requests / elapsed_time
-        avg_latency = self.total_latency / self.successful_requests if self.successful_requests > 0 else 0
-        
         # 書き込み統計
         write_throughput = self.write_successful / elapsed_time
         write_avg_latency = self.write_latency / self.write_successful if self.write_successful > 0 else 0
@@ -202,6 +215,27 @@ class PerformanceEvaluator:
         read_throughput = self.read_successful / elapsed_time
         read_avg_latency = self.read_latency / self.read_successful if self.read_successful > 0 else 0
         read_success_rate = (self.read_successful/(self.read_requests+0.0001)*100)
+        
+        # 統計情報をリセットする前に、現在の値を保存
+        current_stats = {
+           "write": {
+               "throughput": write_throughput,
+               "avg_latency": write_avg_latency * 1000,  # ミリ秒に変換
+               "success_rate": write_success_rate,
+               "requests": self.write_requests,
+               "successful": self.write_successful,
+           },
+           "read": {
+               "throughput": read_throughput,
+               "avg_latency": read_avg_latency * 1000,  # ミリ秒に変換
+               "success_rate": read_success_rate,
+               "requests": self.read_requests,
+               "successful": self.read_successful,
+           },
+           "timestamp": elapsed_time
+        }
+        
+        self.performance_data.append(current_stats)
         
         logger.info(f"""
                 パフォーマンス統計:
@@ -217,32 +251,19 @@ class PerformanceEvaluator:
                   成功率: {read_success_rate:.1f}%
                   リクエスト数: {self.read_requests}
                   成功数: {self.read_successful}
-                Evaluator: PerformanceEvaluator
+                Evaluator: {self.__class__.__name__}
                 """)
         
-        self.performance_data.append({
-           "write": {
-               "throughput": write_throughput,
-               "avg_latency": write_avg_latency,
-               "success_rate": write_success_rate,
-               "requests": self.write_requests,
-               "successful": self.write_successful,
-           },
-           "read": {
-               "throughput": read_throughput,
-               "avg_latency": read_avg_latency,
-               "success_rate": read_success_rate,
-               "requests": self.read_requests,
-               "successful": self.read_successful,
-           }
-        })
-
-        
         # カウンターをリセット
+        self.reset_counters()
+
+    def reset_counters(self):
+        """ カウンターをリセット """
+
         self.total_requests = 0
         self.successful_requests = 0
         self.total_latency = 0
-        self.write_requests = 0
+        self.write_requests = 0 
         self.write_successful = 0
         self.write_latency = 0
         self.read_requests = 0
@@ -254,7 +275,7 @@ class PerformanceEvaluator:
         """ パフォーマンスデータを保存 """
 
         write_ratio_name = str(self.write_ratio).replace('.', '_')
-        with open(f'./dump/performance_data_{self.__class__.__name__}-s{self.requests_per_second}-r{write_ratio_name}-k{self.key_range}-t{self.evaluation_duration}.json', 'w') as f:
+        with open(f'./dump/{self.__class__.__name__}-{self.name}-s{self.requests_per_second}-r{write_ratio_name}-k{self.key_range}-d{self.evaluation_duration}.json', 'w') as f:
             json.dump(self.performance_data, f)
 
 
@@ -262,28 +283,32 @@ class PerformanceEvaluator:
         """ 評価を実行 """
 
         # パラメータ設定
-        self.requests_per_second = 3000  # 1秒あたりのリクエスト数
+        self.requests_per_second = 1000  # 1秒あたりのリクエスト数
         self.write_ratio = 1.0  # 書き込みの割合（0.0〜1.0）
-        self.key_range = 1  # キーの範囲（1〜key_range）
-        self.evaluation_duration = 10  # 評価実行時間（秒）
+        self.key_range = 10  # キーの範囲（1〜key_range）
+        self.evaluation_duration = 4  # 評価実行時間（秒）
 
         logger.info(f"設定: リクエスト数/秒 = {self.requests_per_second}, 書き込み比率 = {self.write_ratio}, キーの範囲 = {self.key_range}, 実行時間 = {self.evaluation_duration}秒")
+
+        # 1.5秒待ってから評価開始 nodeが起動するまで待つ
+        await asyncio.sleep(1.5)
         
         # 事前にキーを初期化
         logger.info(f"キーの初期化を開始します（範囲: 1-{self.key_range}）")
         await self.connect()
-        for i in range(1, self.key_range + 1):
-            key = f"key_{i}"
-            value = random.randint(1, 1000)
-            await self.write(key, value)
-            if i % 10 == 0:
-                logger.info(f"キー初期化進捗: {i}/{self.key_range}")
+        # ランダムなキーを選択して書き込み, リーダーを選ぶ
+        await self.write(f"key_{random.randint(1, self.key_range)}", 1)
         logger.info("キーの初期化が完了しました")
+        # カウンターをリセット
+        self.reset_counters()
         
         # 1秒待ってから評価開始
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(0.5)
         self.start_time = asyncio.get_event_loop().time()
-        self.stats_timer.start()  # 統計タイマーを開始
+
+        # 1秒ごとにパフォーマンス統計を報告するタイマー
+        stats_timer = Timer(1.0, self.report_stats)
+        stats_timer.start()  # 統計タイマーを開始
 
         # リクエスト間隔を計算（秒）
         interval = 1.0 / self.requests_per_second
@@ -292,8 +317,11 @@ class PerformanceEvaluator:
         end_time = self.start_time + self.evaluation_duration
         
         try:
+            request_count = 0
             while asyncio.get_event_loop().time() < end_time:
                 try:
+                    request_start = asyncio.get_event_loop().time()
+                    request_count += 1
                     
                     # ランダムなキーを選択
                     key = f"key_{random.randint(1, self.key_range)}"
@@ -301,22 +329,23 @@ class PerformanceEvaluator:
                     # 書き込みか読み込みかをランダムに決定
                     if random.random() < self.write_ratio:
                         # 書き込み操作
-                        value = random.randint(1, 1000)
-                        await self.write(key, value)
+                        await self.write(key, 23)
                     else:
                         # 読み込み操作
                         await self.read(key)
                     
-                    # 次のリクエストまで待機
-                    await asyncio.sleep(interval)
+                    # 次のリクエストまでの時間を計算（固定間隔ではなく、処理時間を考慮）
+                    elapsed = asyncio.get_event_loop().time() - request_start
+                    sleep_time = max(0, interval - elapsed)
+                    await asyncio.sleep(sleep_time)
                 except Exception as e:
                     logger.error(f"エラーが発生しました: {e}")
             
             # 評価終了メッセージ
-            logger.info(f"評価が完了しました。実行時間: {self.evaluation_duration}秒")
+            logger.info(f"評価が完了しました。実行時間: {self.evaluation_duration}秒、総リクエスト数: {request_count}")
 
             # パフォーマンスデータを保存
             self.save_performance_data()
         finally:
-            self.stats_timer.stop()  # 統計タイマーを停止
+            stats_timer.stop()  # 統計タイマーを停止
             self.transport.close()

@@ -4,6 +4,8 @@
 test.py
 marged_output.md
 
+dump/*
+
 ### macOS ###
 # General
 .DS_Store
