@@ -18,6 +18,7 @@ def render_graph(x, throughput, latency, x_label, experiment_name, x_is_log):
     fig, axes = plt.subplots(1, 2, figsize=(24, 12))  # フィギュアサイズも2倍に
 
     # Throughputプロット
+    max_throughput = max(max(throughput[label]) for label in throughput)
     for label in throughput:
         axes[0].plot(x,
                     throughput[label],
@@ -30,10 +31,11 @@ def render_graph(x, throughput, latency, x_label, experiment_name, x_is_log):
     axes[0].set_xlabel(x_label)
     axes[0].set_ylabel("Throughput (req/sec)")
     axes[0].set_title("(a) Throughput")
-    axes[0].set_ylim(bottom=0)  # y軸を0から開始するように設定
+    axes[0].set_ylim(bottom=0, top=max_throughput + max_throughput * 0.2)  # y軸を0から開始するように設定
     axes[0].legend()
 
     # Latencyプロット
+    max_latency = max(max(latency[label]) for label in latency)
     for label in latency:
         axes[1].plot(x,
                     latency[label],
@@ -46,7 +48,7 @@ def render_graph(x, throughput, latency, x_label, experiment_name, x_is_log):
     axes[1].set_xlabel(x_label)
     axes[1].set_ylabel("Latency (msec)")
     axes[1].set_title("(b) Latency")
-    axes[1].set_ylim(bottom=0)  # y軸を0から開始するように設定
+    axes[1].set_ylim(bottom=0, top=max(max_latency + max_latency, 15))  # y軸を0から開始するように設定
     axes[1].legend()
 
     # レイアウト調整とPDFで保存
