@@ -1,6 +1,8 @@
 {
-	"duration": 4,
-	"requests_per_second": 130,
-	"write_ratio": 1.0,
-	"key_range": 10
+  "duration": 4,
+  "node_nums": 5,
+  "write_ratio": 0.0,
+  "requests_per_second": 130,
+  "key_range": 100,
+  "client_nums": 1
 }

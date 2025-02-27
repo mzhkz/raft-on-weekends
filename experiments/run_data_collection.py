@@ -4,34 +4,30 @@ import subprocess
 import time
 import glob
 import statistics
-import re
 
 # 実験設定
 EXPERIMENT_CONFIGS = [
     "default",
     "o",
     "cca",
-    "o_cca"
+    "opt_cca"
 ]
 
 def update_evaluation_config(config):
     """evaluation_config.jsonを更新する"""
-    with open('evaluation_config.json', 'w') as f:
+    with open('evaluator_config.json', 'w') as f:
         json.dump(config, f, indent=2)
 
 def build_docker_images():
     """Dockerイメージをビルドする"""
-    print("Dockerイメージをビルドしています...")
     subprocess.run(["docker-compose", "build"], check=True)
 
 def run_docker_compose():
     """docker-compose upを実行する"""
-    print("docker-compose upを実行しています...")
     subprocess.run(["docker-compose", "up", "-d"], check=True)
 
 def stop_and_remove_containers():
     """コンテナを停止して削除する"""
-    print("コンテナを停止して削除しています...")
     subprocess.run(["docker-compose", "down"], check=True)
 
 def collect_results(experiment_name, state_type):
@@ -40,41 +36,48 @@ def collect_results(experiment_name, state_type):
         "write_throughput": [],
         "write_latency": [],
         "write_success_rate": [],
+        "write_requests": [],
+
         "read_throughput": [],
         "read_latency": [],
-        "read_success_rate": []
+        "read_success_rate": [],
+        "read_requests": []
     }
+
     
     # dumpディレクトリから結果ファイルを検索（client.pyの命名規則に合わせる）
     # 例: PerformanceEvaluator-client1-s10-r1_0-k100-d4.json
-    files = glob.glob(f"dump/*{state_type}*-*.json")
+    files = glob.glob(f"dump/client_results/*{state_type}*-*.json")
     
     for file_path in files:
         with open(file_path, 'r') as f:
+            # データを読み込む
             data = json.load(f)
             # 各タイムスタンプのデータを処理
             for entry in data:
                 if 'write' in entry:
                     results['write_throughput'].append(entry['write']['throughput'])
                     results['write_latency'].append(entry['write']['avg_latency'])
-                    # results['write_success_rate'].append(entry['write']['success_rate'])
+                    results['write_success_rate'].append(entry['write']['success_rate'])
+                    results['write_requests'].append(entry['write']['requests'])
                 if 'read' in entry:
                     results['read_throughput'].append(entry['read']['throughput'])
                     results['read_latency'].append(entry['read']['avg_latency'])
-                    # results['read_success_rate'].append(entry['read']['success_rate'])
-    
+                    results['read_success_rate'].append(entry['read']['success_rate'])
+                    results['read_requests'].append(entry['read']['requests'])
+            
     # 平均と中央値を計算
     aggregated_results = {}
     for metric in results.keys():
         if results[metric]:
-            aggregated_results[f"{metric}_mean"] = statistics.mean(results[metric])
-            aggregated_results[f"{metric}_median"] = statistics.median(results[metric])
-        else:
-            aggregated_results[f"{metric}_mean"] = 0
-            aggregated_results[f"{metric}_median"] = 0
+            if metric.endswith('throughput') or metric.endswith('latency') or metric.endswith('success_rate'):
+                aggregated_results[f"{metric}_mean"] = statistics.mean(results[metric])
+                aggregated_results[f"{metric}_median"] = statistics.median(results[metric])
+            else:
+                aggregated_results[f"{metric}_sum"] = sum(results[metric])
     
     # 結果をJSONファイルに保存
-    output_dir = "experiment_results"
+    output_dir = "dump/experiment_results"
     os.makedirs(output_dir, exist_ok=True)
     
     with open(f"{output_dir}/{experiment_name}_{state_type}_results.json", 'w') as f:
@@ -98,8 +101,13 @@ def run_experiment(experiment_name, config, state_types):
             os.remove(file)
         
         # 設定を更新
-        config["state_type"] = state_type
+        print(json.dumps(config, indent=2))
+        node_nums = config["node_nums"]
+        client_nums = config["client_nums"]
         update_evaluation_config(config)
+
+        generate_docker_compose_command = ["python", "generate-docker-compose.py", str(node_nums), str(client_nums), state_type]
+        subprocess.run(generate_docker_compose_command)
         
         # Docker Composeを実行
         run_docker_compose()
@@ -108,11 +116,11 @@ def run_experiment(experiment_name, config, state_types):
         print("プロセスが終了するのを待機しています...")
         while True:
             # 結果ファイルが生成されたかチェック（client.pyの命名規則に合わせる）
-            result_files = glob.glob(f"dump/*{state_type}*-*.json")
-            if result_files:
-                print("結果ファイルが生成されました。次に進みます。")
+            result_files = glob.glob(f"dump/client_results/*{state_type}*-*.json")
+            if len(result_files) >= client_nums:
+                print(f"結果ファイルが{client_nums}個生成されました。次に進みます。")
                 break
-            time.sleep(2)  # 2秒ごとにチェック
+            time.sleep(1)  # 2秒ごとにチェック
         
         # コンテナを停止して削除
         stop_and_remove_containers()
@@ -129,8 +137,9 @@ def experiment1():
     base_config = {
         "duration": 4,
         "client_nums": 3,
+        "node_nums": 5,
         "write_ratio": 0.5,
-        "requests_per_second": 10
+        "requests_per_second": 130
     }
     
     results = {}
@@ -142,12 +151,12 @@ def experiment1():
         config = base_config.copy()
         config["key_range"] = key_range
         
-        print(f"キー範囲: {key_range}で実験を実行します")
+        print(f"キー範囲: {key_range}で実験1を実行します")
         exp_results = run_experiment(experiment_name, config, EXPERIMENT_CONFIGS)
         results[key_range] = exp_results
     
     # 全体の結果をJSONファイルに保存
-    with open("experiment_results/experiment1_all_results.json", 'w') as f:
+    with open("dump/experiment_results/experiment1_all_results.json", 'w') as f:
         json.dump(results, f, indent=2)
 
 def experiment2():
@@ -158,7 +167,7 @@ def experiment2():
         "duration": 4,
         "client_nums": 3,
         "write_ratio": 1.0,
-        "requests_per_second": 10,
+        "requests_per_second": 130,
         "key_range": 100
     }
     
@@ -170,12 +179,12 @@ def experiment2():
         config = base_config.copy()
         config["node_nums"] = n
         
-        print(f"ノード数: {n}で実験を実行します")
+        print(f"ノード数: {n}で実験2を実行します")
         exp_results = run_experiment(experiment_name, config, EXPERIMENT_CONFIGS)
         results[n] = exp_results
     
     # 全体の結果をJSONファイルに保存
-    with open("experiment_results/experiment2_all_results.json", 'w') as f:
+    with open("dump/experiment_results/experiment2_all_results.json", 'w') as f:
         json.dump(results, f, indent=2)
 
 def experiment3():
@@ -186,7 +195,7 @@ def experiment3():
         "duration": 4,
         "node_nums": 5,
         "write_ratio": 1.0,
-        "requests_per_second": 10,
+        "requests_per_second": 130,
         "key_range": 100
     }
     
@@ -199,12 +208,12 @@ def experiment3():
         config = base_config.copy()
         config["client_nums"] = client_nums
         
-        print(f"クライアント数: {client_nums}で実験を実行します")
+        print(f"クライアント数: {client_nums}で実験3を実行します")
         exp_results = run_experiment(experiment_name, config, EXPERIMENT_CONFIGS)
         results[client_nums] = exp_results
     
     # 全体の結果をJSONファイルに保存
-    with open("experiment_results/experiment3_all_results.json", 'w') as f:
+    with open("dump/experiment_results/experiment3_all_results.json", 'w') as f:
         json.dump(results, f, indent=2)
 
 def experiment4():
@@ -215,7 +224,7 @@ def experiment4():
         "duration": 4,
         "node_nums": 5,
         "write_ratio": 0.0,
-        "requests_per_second": 10,
+        "requests_per_second": 130,
         "key_range": 100
     }
     
@@ -227,18 +236,18 @@ def experiment4():
         
         config = base_config.copy()
         config["client_nums"] = client_nums
-        
-        print(f"クライアント数: {client_nums}で実験を実行します")
+
+        print(f"クライアント数: {client_nums}で実験4を実行します")
         exp_results = run_experiment(experiment_name, config, EXPERIMENT_CONFIGS)
         results[client_nums] = exp_results
     
     # 全体の結果をJSONファイルに保存
-    with open("experiment_results/experiment4_all_results.json", 'w') as f:
+    with open("dump/experiment_results/experiment4_all_results.json", 'w') as f:
         json.dump(results, f, indent=2)
 
 def main():
     # 実験結果保存ディレクトリを作成
-    os.makedirs("experiment_results", exist_ok=True)
+    os.makedirs("dump/experiment_results", exist_ok=True)
     
     # Dockerイメージをビルド
     build_docker_images()
@@ -249,7 +258,7 @@ def main():
     experiment3()
     experiment4()
     
-    print("すべての実験が完了しました。結果はexperiment_resultsディレクトリに保存されています。")
+    print("すべての実験が完了しました。結果はdump/experiment_resultsディレクトリに保存されています。")
 
 if __name__ == "__main__":
     main()

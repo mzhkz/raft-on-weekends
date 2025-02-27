@@ -21,18 +21,18 @@ services:
     - --requests_per_second
     - '130'
     - --write_ratio
-    - '1.0'
+    - '0.0'
     - --key_range
-    - '10'
+    - '100'
     container_name: client1
     depends_on:
-      node3:
+      node5:
         condition: service_started
     networks:
       raft-common-network:
-        ipv4_address: 10.0.0.5
+        ipv4_address: 10.0.0.7
     ports:
-    - 5558:8888/udp
+    - 5560:8888/udp
     volumes:
     - ./dump:/app/dump
   node1:
@@ -44,7 +44,7 @@ services:
     - --node
     - 10.0.0.2
     - --cluster
-    - node2,node3
+    - node2,node3,node4,node5
     - --name
     - node1
     - --clients
@@ -56,7 +56,7 @@ services:
     container_name: node1
     environment:
     - NODE=node1
-    - CLUSTER=node2,node3
+    - CLUSTER=node2,node3,node4,node5
     - CLIENTS=client1
     networks:
       raft-common-network:
@@ -74,7 +74,7 @@ services:
     - --node
     - 10.0.0.3
     - --cluster
-    - node1,node3
+    - node1,node3,node4,node5
     - --name
     - node2
     - --clients
@@ -86,7 +86,7 @@ services:
     container_name: node2
     environment:
     - NODE=node2
-    - CLUSTER=node1,node3
+    - CLUSTER=node1,node3,node4,node5
     - CLIENTS=client1
     networks:
       raft-common-network:
@@ -104,7 +104,7 @@ services:
     - --node
     - 10.0.0.4
     - --cluster
-    - node1,node2
+    - node1,node2,node4,node5
     - --name
     - node3
     - --clients
@@ -116,13 +116,73 @@ services:
     container_name: node3
     environment:
     - NODE=node3
-    - CLUSTER=node1,node2
+    - CLUSTER=node1,node2,node4,node5
     - CLIENTS=client1
     networks:
       raft-common-network:
         ipv4_address: 10.0.0.4
     ports:
     - 3335:8080/udp
+    volumes:
+    - ./dump:/app/dump
+  node4:
+    build: .
+    command:
+    - python
+    - -m
+    - raft.run_node
+    - --node
+    - 10.0.0.5
+    - --cluster
+    - node1,node2,node3,node5
+    - --name
+    - node4
+    - --clients
+    - client1
+    - --state
+    - opt_cca
+    - --duration
+    - '4'
+    container_name: node4
+    environment:
+    - NODE=node4
+    - CLUSTER=node1,node2,node3,node5
+    - CLIENTS=client1
+    networks:
+      raft-common-network:
+        ipv4_address: 10.0.0.5
+    ports:
+    - 3336:8080/udp
+    volumes:
+    - ./dump:/app/dump
+  node5:
+    build: .
+    command:
+    - python
+    - -m
+    - raft.run_node
+    - --node
+    - 10.0.0.6
+    - --cluster
+    - node1,node2,node3,node4
+    - --name
+    - node5
+    - --clients
+    - client1
+    - --state
+    - opt_cca
+    - --duration
+    - '4'
+    container_name: node5
+    environment:
+    - NODE=node5
+    - CLUSTER=node1,node2,node3,node4
+    - CLIENTS=client1
+    networks:
+      raft-common-network:
+        ipv4_address: 10.0.0.6
+    ports:
+    - 3337:8080/udp
     volumes:
     - ./dump:/app/dump
 version: '3.8'

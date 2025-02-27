@@ -3,6 +3,7 @@ import asyncio
 import uuid
 import random
 import json
+import os
 import time
 from raft.serializers import MessagePackSerializer
 from raft.logger import logger  # Raftのロガーをインポート
@@ -280,8 +281,9 @@ class PerformanceEvaluator:
         """ パフォーマンスデータを保存 """
 
         write_ratio_name = str(self.write_ratio).replace('.', '_')
-        with open(f'./dump/{self.evaluator_name}-{self.name}-s{self.requests_per_second}-r{write_ratio_name}-k{self.key_range}-d{self.duration}.json', 'w') as f:
-            json.dump(self.performance_data, f)
+        os.makedirs(f'./dump/client_results/', exist_ok=True)
+        with open(f'./dump/client_results/{self.evaluator_name}-{self.name}-s{self.requests_per_second}-r{write_ratio_name}-k{self.key_range}-d{self.duration}.json', 'w') as f:
+            json.dump(self.performance_data, f, indent=2)
 
 
     async def run(self):
