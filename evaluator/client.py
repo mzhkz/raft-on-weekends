@@ -11,13 +11,14 @@ from raft.timer import Timer
 from client.network import ClientUDPProtocol
 
 class PerformanceEvaluator:
-    def __init__(self, name, duration, requests_per_second, write_ratio, key_range):
+    def __init__(self, name, duration, requests_per_second, write_ratio, key_range, evaluator_name):
         # 評価の設定
         self.name = name
         self.duration = duration
         self.requests_per_second = requests_per_second
         self.write_ratio = write_ratio
         self.key_range = key_range
+        self.evaluator_name = evaluator_name
 
         # Raft処理用
         self.commit_events = {}
@@ -279,7 +280,7 @@ class PerformanceEvaluator:
         """ パフォーマンスデータを保存 """
 
         write_ratio_name = str(self.write_ratio).replace('.', '_')
-        with open(f'./dump/{self.__class__.__name__}-{self.name}-s{self.requests_per_second}-r{write_ratio_name}-k{self.key_range}-d{self.duration}.json', 'w') as f:
+        with open(f'./dump/{self.evaluator_name}-{self.name}-s{self.requests_per_second}-r{write_ratio_name}-k{self.key_range}-d{self.duration}.json', 'w') as f:
             json.dump(self.performance_data, f)
 
 
@@ -300,12 +301,12 @@ class PerformanceEvaluator:
 
         for i in range(1, self.key_range + 1):
             await self.write(f"key_{i}", 1)
-        logger.info("キーの初期化が完了しました")
+        logger.info("キーの初期化が完了しました (1.5秒待ってから評価開始)")
         # カウンターをリセット
-        self.reset_counters()
         
         # 1秒待ってから評価開始
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(1.5)
+        self.reset_counters()
         self.start_time = asyncio.get_event_loop().time()
 
         # 1秒ごとにパフォーマンス統計を報告するタイマー

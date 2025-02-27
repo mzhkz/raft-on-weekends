@@ -13,8 +13,8 @@ from crypto.VSS import split, combine
 from crypto.parameters import TEST_PARAMS
 
 class CCAPerformanceEvaluator(PerformanceEvaluator):
-    def __init__(self, name, duration, requests_per_second, write_ratio, key_range):
-        super().__init__(name, duration, requests_per_second, write_ratio, key_range)
+    def __init__(self, name, duration, requests_per_second, write_ratio, key_range, evaluator_name):
+        super().__init__(name, duration, requests_per_second, write_ratio, key_range, evaluator_name)
         
        # cca client用の変数
         self.granted_share_events = {}

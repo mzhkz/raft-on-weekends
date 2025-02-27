@@ -13,8 +13,8 @@ from crypto.VSS import split, combine
 from crypto.parameters import TEST_PARAMS
 
 class OptCCAPerformanceEvaluator(PerformanceEvaluator):
-    def __init__(self, name, duration, requests_per_second, write_ratio, key_range):
-        super().__init__(name, duration, requests_per_second, write_ratio, key_range)
+    def __init__(self, name, duration, requests_per_second, write_ratio, key_range, evaluator_name):
+        super().__init__(name, duration, requests_per_second, write_ratio, key_range, evaluator_name)
         
 
     def handle_response(self, response):

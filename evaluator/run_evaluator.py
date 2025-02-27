@@ -25,6 +25,6 @@ if __name__ == '__main__':
     parser.add_argument('--key_range', default=10)
     args = parser.parse_args()
 
-    evaluator = getEvaluatorClass(args.evaluator)(args.name, int(args.duration), int(args.requests_per_second), float(args.write_ratio), int(args.key_range))
+    evaluator = getEvaluatorClass(args.evaluator)(args.name, int(args.duration), int(args.requests_per_second), float(args.write_ratio), int(args.key_range), args.evaluator)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(evaluator.run())
