@@ -7,9 +7,9 @@ WORKDIR /app
 # Copy the current directory contents into the container at /app
 COPY . .
 
-RUN pip install --upgrade pip
-RUN apt-get update
-RUN apt-get install -y libmpc-dev
+# RUN pip install --upgrade pip
+# RUN apt-get update
+# RUN apt-get install -y libmpc-dev
 
 # Install any needed packages specified in requirements.txt
 RUN pip install -r requirements.txt

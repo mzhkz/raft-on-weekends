@@ -13,6 +13,23 @@ EXPERIMENT_CONFIGS = [
     "opt_cca"
 ]
 
+
+BASE_CONFIG = {
+    "duration": 5,
+    "client_nums": 3,
+    "node_nums": 5,
+    "write_ratio": 0.5,
+    "requests_per_second": 130,
+    "key_range": 100
+}
+
+def delete_dump_files():
+    """dumpファイルとフォルダを削除する"""
+    for file in glob.glob("dump/client_results/*", recursive=True):
+        os.remove(file)
+    for file in glob.glob("dump/experiment_results/*", recursive=True):
+        os.remove(file)
+
 def update_evaluation_config(config):
     """evaluation_config.jsonを更新する"""
     with open('evaluator_config.json', 'w') as f:
@@ -24,7 +41,7 @@ def build_docker_images():
 
 def run_docker_compose():
     """docker-compose upを実行する"""
-    subprocess.run(["docker-compose", "up", "-d"], check=True)
+    subprocess.run(["docker-compose", "up", "-d", "--build"], check=True)
 
 def stop_and_remove_containers():
     """コンテナを停止して削除する"""
@@ -84,7 +101,7 @@ def collect_results(experiment_name, state_type):
         json.dump(aggregated_results, f, indent=2)
 
     # dumpファイルを削除
-    for file in glob.glob(f"dump/*{state_type}*-*.json"):
+    for file in glob.glob(f"dump/client_results/*{state_type}*-*.json"):
         os.remove(file)
     
     return aggregated_results
@@ -94,7 +111,9 @@ def run_experiment(experiment_name, config, state_types):
     results = {}
     
     for state_type in state_types:
+        print("--------------------------------")
         print(f"実験 {experiment_name} を {state_type} で実行中...")
+
         
         # 既存の結果ファイルを削除
         for file in glob.glob("dump/*.json"):
@@ -108,6 +127,7 @@ def run_experiment(experiment_name, config, state_types):
 
         generate_docker_compose_command = ["python", "generate-docker-compose.py", str(node_nums), str(client_nums), state_type]
         subprocess.run(generate_docker_compose_command)
+        time.sleep(1)
         
         # Docker Composeを実行
         run_docker_compose()
@@ -134,13 +154,7 @@ def experiment1():
     """実験1: キーのバリエーション、2^n (0 <= n <= 9, 1刻み), write_ratio = 0.5, クライアントの個数 3"""
     print("実験1を開始します...")
     
-    base_config = {
-        "duration": 4,
-        "client_nums": 3,
-        "node_nums": 5,
-        "write_ratio": 0.5,
-        "requests_per_second": 130
-    }
+    base_config = BASE_CONFIG.copy()
     
     results = {}
     
@@ -163,13 +177,8 @@ def experiment2():
     """実験2: ノードの個数、n (4 <= n <= 9, 1刻み)、クライアントの個数 3, write_ratio = 1.0"""
     print("実験2を開始します...")
     
-    base_config = {
-        "duration": 4,
-        "client_nums": 3,
-        "write_ratio": 1.0,
-        "requests_per_second": 130,
-        "key_range": 100
-    }
+    base_config = BASE_CONFIG.copy()
+    base_config["write_ratio"] = 1.0
     
     results = {}
     
@@ -191,13 +200,8 @@ def experiment3():
     """実験3: クライアントの個数 2^n (0 <= n <= 5, 1刻み), write_ratio = 1.0"""
     print("実験3を開始します...")
     
-    base_config = {
-        "duration": 4,
-        "node_nums": 5,
-        "write_ratio": 1.0,
-        "requests_per_second": 130,
-        "key_range": 100
-    }
+    base_config = BASE_CONFIG.copy()
+    base_config["write_ratio"] = 1.0
     
     results = {}
     
@@ -220,13 +224,8 @@ def experiment4():
     """実験4: クライアントの個数 2^n (0 <= n <= 5, 1刻み), write_ratio = 0"""
     print("実験4を開始します...")
     
-    base_config = {
-        "duration": 4,
-        "node_nums": 5,
-        "write_ratio": 0.0,
-        "requests_per_second": 130,
-        "key_range": 100
-    }
+    base_config = BASE_CONFIG.copy()
+    base_config["write_ratio"] = 0
     
     results = {}
     
@@ -248,6 +247,7 @@ def experiment4():
 def main():
     # 実験結果保存ディレクトリを作成
     os.makedirs("dump/experiment_results", exist_ok=True)
+    delete_dump_files()
     
     # Dockerイメージをビルド
     build_docker_images()
