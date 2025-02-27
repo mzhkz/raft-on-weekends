@@ -6,7 +6,7 @@ from evaluator.cca_client import CCAPerformanceEvaluator
 from evaluator.opt_cca_client import OptCCAPerformanceEvaluator
 
 def getEvaluatorClass(evaluator_name):
-    if evaluator_name == 'default':
+    if evaluator_name == 'default' or evaluator_name == 'o':
         return PerformanceEvaluator
     elif evaluator_name == 'cca':
         return CCAPerformanceEvaluator

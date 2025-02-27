@@ -26,6 +26,7 @@ class OState:
         self.last_applied = -1  # ステートマシンに適用された最新のログインデックス
 
         self.commit_event = None
+        self.wait_for_commit_index = -1
         
         # リーダー専用の状態
         self.next_index = {}  # 各フォロワーに送信する次のログインデックス
@@ -408,6 +409,7 @@ class OState:
         if self.commit_event:
             await self.commit_event.wait()
         self.commit_event = asyncio.Event()
+        self.wait_for_commit_index = len(self.logs)
         
         # ログに追加
         self.logs.append(entry)
@@ -419,6 +421,7 @@ class OState:
 
     async def update_commit_index(self):
         """コミットインデックスの更新"""
+        commited = False
         for n in range(self.commit_index + 1, len(self.logs)):
             if self.logs[n]['term'] != self.current_term:
                 continue
@@ -432,9 +435,8 @@ class OState:
                 self.commit_index = n
                 await self.apply_logs()
 
-                # コミットイベントをリセット
-                if self.commit_event:
-                    self.commit_event.set()
+                if self.wait_for_commit_index == n:
+                    commited = True
                 
                 # コミット完了後、関連するクライアントリクエストに応答
                 entry = self.logs[n]
@@ -449,4 +451,8 @@ class OState:
                         await client.send(response)
                         del self.pending_requests[request_id]
                 
+        if commited:
+            self.commit_event.set()
+            self.wait_for_commit_index = -1
+
                 # logger.info(f"{self.node.name} committed logs up to index {self.commit_index}")
