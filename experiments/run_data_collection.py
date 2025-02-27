@@ -45,7 +45,8 @@ def run_docker_compose():
 
 def stop_and_remove_containers():
     """コンテナを停止して削除する"""
-    subprocess.run(["docker-compose", "down"], check=True)
+    subprocess.run(["docker-compose", "kill"], check=True)
+    subprocess.run(["docker-compose", "rm", "-f", "-a"], check=True)
 
 def collect_results(experiment_name, state_type, write_ratio):
     """実験結果を収集して集計する"""
@@ -277,13 +278,13 @@ def main():
     delete_dump_files()
     
     # Dockerイメージをビルド
-    build_docker_images()
+    # build_docker_images()
     
     # 各実験を実行
-    # experiment1()
-    # experiment2()
+    experiment1()
+    experiment2()
     experiment3()
-    # experiment4()
+    experiment4()
     
     print("すべての実験が完了しました。結果はdump/experiment_resultsディレクトリに保存されています。")
 
