@@ -3,7 +3,7 @@ import numpy as np
 import glob
 import json
 import os
-def render_graph(x, throughput, latency, x_label, experiment_name):
+def render_graph(x, throughput, latency, x_label, experiment_name, x_is_log):
     """グラフを描画する"""
     # データの準備
     # フォントサイズの設定
@@ -25,7 +25,8 @@ def render_graph(x, throughput, latency, x_label, experiment_name):
                     marker='o',
                     markersize=20,  # マーカーサイズも大きく
                     linewidth=4)    # 線の太さも太く
-    # axes[0].set_xscale('log', base=2)
+    # if x_is_log:
+        # axes[0].set_xscale('log', base=2)
     axes[0].set_xlabel(x_label)
     axes[0].set_ylabel("Throughput (req/sec)")
     axes[0].set_title("(a) Throughput")
@@ -59,6 +60,7 @@ def load_data(experiment_name):
     with open(file, 'r') as f:
         data = json.load(f)
         x = data.keys()
+        x_is_log = False
         write_throughput = {}
         write_latency = {}
         read_throughput = {}
@@ -79,6 +81,7 @@ def main():
         y_latency = []
         if experiment_name == "experiment1": # キーのバリエーション
             x_label = "Number of Keys"
+            x_is_log = True
             y_throughput = read_throughput
             y_latency = read_latency
         elif experiment_name == "experiment2": # ノードの数
@@ -87,14 +90,16 @@ def main():
             y_latency = write_latency
         elif experiment_name == "experiment3": # クライアントの数でwrite_ratio=1.0 (write)
             x_label = "Number of Clients"
+            x_is_log = True
             y_throughput = write_throughput
             y_latency = write_latency
         elif experiment_name == "experiment4": # クライアントの数でwrite_ratio=0.0 (read)
             x_label = "Number of Clients"
+            x_is_log = True
             y_throughput = read_throughput
             y_latency = read_latency
         # グラフを描画
-        render_graph(x, y_throughput, y_latency, x_label, experiment_name) 
+        render_graph(x, y_throughput, y_latency, x_label, experiment_name, x_is_log) 
 
 if __name__ == "__main__":
     main()

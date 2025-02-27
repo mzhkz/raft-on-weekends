@@ -18,5 +18,7 @@ st_handler.setFormatter(logging.Formatter(format))
 # Fileハンドラクラスをインスタンス化
 # fl_handler = logging.FileHandler(filename=filename, encoding="utf-8")
 
+
+
 logger.addHandler(st_handler)
 # logger.addHandler(fl_handler)

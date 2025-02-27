@@ -17,11 +17,11 @@ services:
     - --evaluator
     - opt_cca
     - --duration
-    - '4'
+    - '5'
     - --requests_per_second
     - '130'
     - --write_ratio
-    - '0.0'
+    - '0'
     - --key_range
     - '100'
     container_name: client1
@@ -52,7 +52,7 @@ services:
     - --state
     - opt_cca
     - --duration
-    - '4'
+    - '5'
     container_name: node1
     environment:
     - NODE=node1
@@ -82,7 +82,7 @@ services:
     - --state
     - opt_cca
     - --duration
-    - '4'
+    - '5'
     container_name: node2
     environment:
     - NODE=node2
@@ -112,7 +112,7 @@ services:
     - --state
     - opt_cca
     - --duration
-    - '4'
+    - '5'
     container_name: node3
     environment:
     - NODE=node3
@@ -142,7 +142,7 @@ services:
     - --state
     - opt_cca
     - --duration
-    - '4'
+    - '5'
     container_name: node4
     environment:
     - NODE=node4
@@ -172,7 +172,7 @@ services:
     - --state
     - opt_cca
     - --duration
-    - '4'
+    - '5'
     container_name: node5
     environment:
     - NODE=node5

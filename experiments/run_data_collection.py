@@ -6,7 +6,7 @@ import glob
 import statistics
 
 # 実験設定
-EXPERIMENT_CONFIGS = [
+STATE_TYPES = [
     "default",
     "o",
     "cca",
@@ -15,7 +15,7 @@ EXPERIMENT_CONFIGS = [
 
 
 BASE_CONFIG = {
-    "duration": 5,
+    "duration": 4,
     "client_nums": 3,
     "node_nums": 5,
     "write_ratio": 0.5,
@@ -158,7 +158,7 @@ def experiment1():
     
     results = {}
     
-    for n in range(1):  # 0から9まで
+    for n in range(0, 10):  # 0から9まで
         key_range = 2 ** n
         experiment_name = f"experiment1_keys_{key_range}"
         
@@ -166,7 +166,7 @@ def experiment1():
         config["key_range"] = key_range
         
         print(f"キー範囲: {key_range}で実験1を実行します")
-        exp_results = run_experiment(experiment_name, config, EXPERIMENT_CONFIGS)
+        exp_results = run_experiment(experiment_name, config, STATE_TYPES)
         results[key_range] = exp_results
     
     # 全体の結果をJSONファイルに保存
@@ -182,14 +182,14 @@ def experiment2():
     
     results = {}
     
-    for n in range(4, 5):  # 4から9まで
+    for n in range(4, 10):  # 4から9まで
         experiment_name = f"experiment2_nodes_{n}"
         
         config = base_config.copy()
         config["node_nums"] = n
         
         print(f"ノード数: {n}で実験2を実行します")
-        exp_results = run_experiment(experiment_name, config, EXPERIMENT_CONFIGS)
+        exp_results = run_experiment(experiment_name, config, STATE_TYPES)
         results[n] = exp_results
     
     # 全体の結果をJSONファイルに保存
@@ -205,7 +205,7 @@ def experiment3():
     
     results = {}
     
-    for n in range(1):  # 0から5まで
+    for n in range(0, 6):  # 0から5まで
         client_nums = 2 ** n
         experiment_name = f"experiment3_clients_{client_nums}"
         
@@ -213,7 +213,7 @@ def experiment3():
         config["client_nums"] = client_nums
         
         print(f"クライアント数: {client_nums}で実験3を実行します")
-        exp_results = run_experiment(experiment_name, config, EXPERIMENT_CONFIGS)
+        exp_results = run_experiment(experiment_name, config, STATE_TYPES)
         results[client_nums] = exp_results
     
     # 全体の結果をJSONファイルに保存
@@ -229,7 +229,7 @@ def experiment4():
     
     results = {}
     
-    for n in range(1):  # 0から5まで
+    for n in range(0, 6):  # 0から5まで
         client_nums = 2 ** n
         experiment_name = f"experiment4_clients_{client_nums}"
         
@@ -237,7 +237,7 @@ def experiment4():
         config["client_nums"] = client_nums
 
         print(f"クライアント数: {client_nums}で実験4を実行します")
-        exp_results = run_experiment(experiment_name, config, EXPERIMENT_CONFIGS)
+        exp_results = run_experiment(experiment_name, config, STATE_TYPES)
         results[client_nums] = exp_results
     
     # 全体の結果をJSONファイルに保存
@@ -259,6 +259,8 @@ def main():
     experiment4()
     
     print("すべての実験が完了しました。結果はdump/experiment_resultsディレクトリに保存されています。")
+    subprocess.run(["python", "render_graph.py"])
+    print("グラフが作成されました。")
 
 if __name__ == "__main__":
     main()
