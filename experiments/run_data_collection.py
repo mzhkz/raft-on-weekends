@@ -47,7 +47,7 @@ def stop_and_remove_containers():
     """コンテナを停止して削除する"""
     subprocess.run(["docker-compose", "down"], check=True)
 
-def collect_results(experiment_name, state_type):
+def collect_results(experiment_name, state_type, check_write=True):
     """実験結果を収集して集計する"""
     results = {
         "write_throughput": [],
@@ -71,14 +71,18 @@ def collect_results(experiment_name, state_type):
             # データを読み込む
             data = json.load(f)
             # 各タイムスタンプのデータを処理
-            for entry in data:
+            for i, entry in enumerate(data):
                 if 'write' in entry:
-                    results['write_throughput'].append(entry['write']['throughput'])
+                    if len(results['write_throughput']) <= i:
+                        results['write_throughput'].append([])
+                    results['write_throughput'][i].append(entry['write']['throughput'])
                     results['write_latency'].append(entry['write']['avg_latency'])
                     results['write_success_rate'].append(entry['write']['success_rate'])
                     results['write_requests'].append(entry['write']['requests'])
                 if 'read' in entry:
-                    results['read_throughput'].append(entry['read']['throughput'])
+                    if len(results['read_throughput']) <= i:
+                        results['read_throughput'].append([])
+                    results['read_throughput'][i].append(entry['read']['throughput'])
                     results['read_latency'].append(entry['read']['avg_latency'])
                     results['read_success_rate'].append(entry['read']['success_rate'])
                     results['read_requests'].append(entry['read']['requests'])
@@ -87,11 +91,18 @@ def collect_results(experiment_name, state_type):
     aggregated_results = {}
     for metric in results.keys():
         if results[metric]:
-            if metric.endswith('throughput') or metric.endswith('latency') or metric.endswith('success_rate'):
+            if metric.endswith('latency') or metric.endswith('success_rate'):
                 aggregated_results[f"{metric}_mean"] = statistics.mean(results[metric])
                 aggregated_results[f"{metric}_median"] = statistics.median(results[metric])
+            elif metric.endswith('throughput'):
+                aggregated_results[f"{metric}_mean"] = statistics.mean([sum(results[metric][i]) for i in range(len(results[metric]))])
+                aggregated_results[f"{metric}_median"] = statistics.median([sum(results[metric][i]) for i in range(len(results[metric]))])
             else:
                 aggregated_results[f"{metric}_sum"] = sum(results[metric])
+
+    check_label = "write" if check_write else "read"
+    if aggregated_results[f"{check_label}_throughput_median"] < 10 or aggregated_results[f"{check_label}_latency_median"] < 0.1:
+        raise Exception(f"実験結果が不正です: {aggregated_results}")
     
     # 結果をJSONファイルに保存
     output_dir = "dump/experiment_results"
@@ -146,7 +157,12 @@ def run_experiment(experiment_name, config, state_types):
         stop_and_remove_containers()
         
         # 結果を収集
-        results[state_type] = collect_results(experiment_name, state_type)
+        try:
+            results[state_type] = collect_results(experiment_name, state_type, config["write_ratio"] > 0.0)
+        except Exception as e:
+            print(e)
+            print("実験結果が不正です。再実行します。")
+            run_experiment(experiment_name, config, state_types)
     
     return results
 
@@ -255,8 +271,8 @@ def main():
     # 各実験を実行
     # experiment1()
     # experiment2()
-    # experiment3()
-    experiment4()
+    experiment3()
+    # experiment4()
     
     print("すべての実験が完了しました。結果はdump/experiment_resultsディレクトリに保存されています。")
 

@@ -2,7 +2,7 @@
   "duration": 4,
   "client_nums": 2,
   "node_nums": 5,
-  "write_ratio": 0,
+  "write_ratio": 1.0,
   "requests_per_second": 130,
   "key_range": 50
 }
