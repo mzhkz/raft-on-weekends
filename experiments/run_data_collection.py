@@ -15,7 +15,7 @@ STATE_TYPES = [
 
 
 BASE_CONFIG = {
-    "duration": 4,
+    "duration": 7,
     "client_nums": 3,
     "node_nums": 5,
     "write_ratio": 0.5,
@@ -47,7 +47,7 @@ def stop_and_remove_containers():
     """コンテナを停止して削除する"""
     subprocess.run(["docker-compose", "down"], check=True)
 
-def collect_results(experiment_name, state_type, check_write=True):
+def collect_results(experiment_name, state_type, write_ratio):
     """実験結果を収集して集計する"""
     results = {
         "write_throughput": [],
@@ -94,15 +94,27 @@ def collect_results(experiment_name, state_type, check_write=True):
             if metric.endswith('latency') or metric.endswith('success_rate'):
                 aggregated_results[f"{metric}_mean"] = statistics.mean(results[metric])
                 aggregated_results[f"{metric}_median"] = statistics.median(results[metric])
+                aggregated_results[f"{metric}_min"] = min(results[metric])
+                aggregated_results[f"{metric}_max"] = max(results[metric])
             elif metric.endswith('throughput'):
                 aggregated_results[f"{metric}_mean"] = statistics.mean([sum(results[metric][i]) for i in range(len(results[metric]))])
                 aggregated_results[f"{metric}_median"] = statistics.median([sum(results[metric][i]) for i in range(len(results[metric]))])
+                aggregated_results[f"{metric}_min"] = min([sum(results[metric][i]) for i in range(len(results[metric]))])
+                aggregated_results[f"{metric}_max"] = max([sum(results[metric][i]) for i in range(len(results[metric]))])
             else:
                 aggregated_results[f"{metric}_sum"] = sum(results[metric])
+                aggregated_results[f"{metric}_min"] = min(results[metric])
+                aggregated_results[f"{metric}_max"] = max(results[metric])
 
-    check_label = "write" if check_write else "read"
-    if aggregated_results[f"{check_label}_throughput_median"] < 10 or aggregated_results[f"{check_label}_latency_median"] < 0.1:
-        raise Exception(f"実験結果が不正です: {aggregated_results}")
+    if write_ratio == 0.0:
+        if aggregated_results['read_throughput_median'] <= 20 or aggregated_results['read_latency_median'] < 0.1:
+            raise Exception(f"実験結果が不正です: {aggregated_results}")
+    elif write_ratio == 1.0:
+        if aggregated_results['write_throughput_median'] <= 20 or aggregated_results['write_latency_median'] < 0.1:
+            raise Exception(f"実験結果が不正です: {aggregated_results}")
+    else:
+        if aggregated_results['write_throughput_median'] <= 5 or aggregated_results['write_latency_median'] < 0.1 or aggregated_results['read_throughput_median'] <= 3 or aggregated_results['read_latency_median'] < 0.1:
+            raise Exception(f"実験結果が不正です: {aggregated_results}")
     
     # 結果をJSONファイルに保存
     output_dir = "dump/experiment_results"
@@ -136,8 +148,7 @@ def run_experiment(experiment_name, config, state_types):
         client_nums = config["client_nums"]
         update_evaluation_config(config)
 
-        generate_docker_compose_command = ["python", "generate-docker-compose.py", str(node_nums), str(client_nums), state_type]
-        subprocess.run(generate_docker_compose_command)
+        subprocess.run(["python", "generate-docker-compose.py", str(node_nums), str(client_nums), state_type])
         time.sleep(1)
         
         # Docker Composeを実行
@@ -149,7 +160,7 @@ def run_experiment(experiment_name, config, state_types):
             # 結果ファイルが生成されたかチェック（client.pyの命名規則に合わせる）
             result_files = glob.glob(f"dump/client_results/*{state_type}*-*.json")
             if len(result_files) >= client_nums:
-                print(f"結果ファイルが{client_nums}個生成されました。次に進みます。")
+                # print(f"結果ファイルが{client_nums}個生成されました。次に進みます。")
                 break
             time.sleep(0.2)  # 2秒ごとにチェック
         
@@ -158,7 +169,7 @@ def run_experiment(experiment_name, config, state_types):
         
         # 結果を収集
         try:
-            results[state_type] = collect_results(experiment_name, state_type, config["write_ratio"] > 0.0)
+            results[state_type] = collect_results(experiment_name, state_type, config["write_ratio"])
         except Exception as e:
             print(e)
             print("実験結果が不正です。再実行します。")
