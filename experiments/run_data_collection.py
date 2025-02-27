@@ -20,7 +20,7 @@ BASE_CONFIG = {
     "node_nums": 5,
     "write_ratio": 0.5,
     "requests_per_second": 130,
-    "key_range": 100
+    "key_range": 50
 }
 
 def delete_dump_files():
@@ -158,7 +158,7 @@ def experiment1():
     
     results = {}
     
-    for n in range(0, 10):  # 0から9まで
+    for n in range(0, 6):  # 0から6まで
         key_range = 2 ** n
         experiment_name = f"experiment1_keys_{key_range}"
         
@@ -253,14 +253,12 @@ def main():
     build_docker_images()
     
     # 各実験を実行
-    experiment1()
-    experiment2()
-    experiment3()
+    # experiment1()
+    # experiment2()
+    # experiment3()
     experiment4()
     
     print("すべての実験が完了しました。結果はdump/experiment_resultsディレクトリに保存されています。")
-    subprocess.run(["python", "render_graph.py"])
-    print("グラフが作成されました。")
 
 if __name__ == "__main__":
     main()

@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-from logger import logger
 
 from raft.server import register_as_client_node, register_as_server_node, register_as_raft_client, setup
 
@@ -30,7 +29,7 @@ if __name__ == '__main__':
     
     # 5秒後にループを停止する
     async def stop_after_5_seconds():
-        duration = int(args.duration) + 3
+        duration = int(args.duration) * 2 + 1
         await asyncio.sleep(duration) # 評価時間の2倍
         loop.stop()
         print(f"{duration}秒経過したため、プログラムを停止します")

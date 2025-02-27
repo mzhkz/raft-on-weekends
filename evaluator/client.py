@@ -95,6 +95,7 @@ class PerformanceEvaluator:
             latency = asyncio.get_event_loop().time() - start_time
             self.total_latency += latency
             self.read_latency += latency
+            # logger.info(f"読み込みリクエストのレイテンシ: {latency}")
             del self.start_times[request_id]
         else:
             logger.warning(f"未知のリクエストID: {request_id}")
@@ -124,6 +125,7 @@ class PerformanceEvaluator:
         if request_id in self.start_times:
             start_time = self.start_times[request_id]
             latency = asyncio.get_event_loop().time() - start_time
+            # logger.info(f"書き込みリクエストのレイテンシ: {latency}")   
             self.total_latency += latency
             self.write_latency += latency
             del self.start_times[request_id]
@@ -303,6 +305,7 @@ class PerformanceEvaluator:
 
         for i in range(1, self.key_range + 1):
             await self.write(f"key_{i}", 1)
+            await asyncio.sleep(0.05)
         logger.info("キーの初期化が完了しました (1.5秒待ってから評価開始)")
         # カウンターをリセット
         
