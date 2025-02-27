@@ -15,13 +15,13 @@ services:
     - --name
     - client1
     - --evaluator
-    - default
+    - opt_cca
     - --duration
-    - '5'
+    - '4'
     - --requests_per_second
-    - '1000'
+    - '120'
     - --write_ratio
-    - '1.0'
+    - '0.9'
     - --key_range
     - '10'
     container_name: client1
@@ -50,9 +50,9 @@ services:
     - --clients
     - client1
     - --state
-    - default
+    - opt_cca
     - --duration
-    - '5'
+    - '4'
     container_name: node1
     environment:
     - NODE=node1
@@ -63,7 +63,6 @@ services:
         ipv4_address: 10.0.0.2
     ports:
     - 3333:8080/udp
-    sysctls: {}
     volumes:
     - ./dump:/app/dump
   node2:
@@ -81,9 +80,9 @@ services:
     - --clients
     - client1
     - --state
-    - default
+    - opt_cca
     - --duration
-    - '5'
+    - '4'
     container_name: node2
     environment:
     - NODE=node2
@@ -94,7 +93,6 @@ services:
         ipv4_address: 10.0.0.3
     ports:
     - 3334:8080/udp
-    sysctls: {}
     volumes:
     - ./dump:/app/dump
   node3:
@@ -112,9 +110,9 @@ services:
     - --clients
     - client1
     - --state
-    - default
+    - opt_cca
     - --duration
-    - '5'
+    - '4'
     container_name: node3
     environment:
     - NODE=node3
@@ -125,7 +123,6 @@ services:
         ipv4_address: 10.0.0.4
     ports:
     - 3335:8080/udp
-    sysctls: {}
     volumes:
     - ./dump:/app/dump
 version: '3.8'

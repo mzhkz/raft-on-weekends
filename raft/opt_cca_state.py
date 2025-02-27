@@ -23,6 +23,7 @@ class OptCCAState:
         self.last_applied = -1  # ステートマシンに適用された最新のログインデックス
 
         self.commit_event = None
+        self.wait_for_commit_index = -1
         
         # リーダー専用の状態
         self.next_index = {}  # 各フォロワーに送信する次のログインデックス
@@ -292,7 +293,6 @@ class OptCCAState:
                 success = True
                 # 新しいエントリがある場合は追加
                 if message['entries']:
-                    # logger.info(f"{self.node.name} received {len(message['entries'])} new log entries from leader (commit_index: {message['leader_commit']})")
                     # 競合するエントリを削除し、新しいエントリを追加
                     self.logs = self.logs[:message['prev_log_index'] + 1]
                     self.logs.extend(message['entries'])
@@ -392,13 +392,16 @@ class OptCCAState:
         if self.commit_event:
             await self.commit_event.wait()
         self.commit_event = asyncio.Event()
+        self.wait_for_commit_index = len(self.logs)
+
+        # logger.info(f"{self.node.name} waiting for commit index {self.wait_for_commit_index}")
         
         # ログに追加
         self.logs.append(entry)
 
         # 書き込むキーへの読み込みをロック
         self.read_locks[message['key']] = asyncio.Event()
-        
+
         # 全フォロワーにログを複製
         for node in self.node.cluster:
             if not node.is_myself:
@@ -476,6 +479,9 @@ class OptCCAState:
 
     async def update_commit_index(self):
         """コミットインデックスの更新"""
+
+        commited = False
+
         for n in range(self.commit_index + 1, len(self.logs)):
             if self.logs[n]['term'] != self.current_term:
                 continue
@@ -488,9 +494,8 @@ class OptCCAState:
             if replicated > len(self.node.cluster) // 2:
                 self.commit_index = n
                 await self.apply_logs()
-
-                if self.commit_event:
-                    self.commit_event.set()
+                if self.wait_for_commit_index == n:
+                   commited = True
                 
                 # コミット完了後、関連するクライアントリクエストに応答
                 entry = self.logs[n]
@@ -506,6 +511,10 @@ class OptCCAState:
                         del self.pending_requests[request_id]
                 
                 # logger.info(f"{self.node.name} committed logs up to index {self.commit_index}")
+
+        if commited:
+            self.commit_event.set()
+            self.wait_for_commit_index = -1
 
     async def garbage_collection(self):
         """古いバケットを削除する"""

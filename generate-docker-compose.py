@@ -42,17 +42,12 @@ def generate_docker_compose(num_nodes, client_nums, state_name, evaluator_config
                 }
             },
             'volumes': [f'./dump:/app/dump'],
-            "sysctls": {
-                # "net.inet.udp.maxdgram": 65536,
-                # "net.inet.udp.recvspace": 65536,
-                # "net.inet.udp.sendspace": 65536,
-                # "net.inet.udp.maxdgram": 65536,
-                # "net.inet.udp.recvspace": 65536,
-                # "net.inet.udp.sendspace": 65536,
-                # "net.inet.udp.maxdgram": 65536,
-                # "net.inet.udp.recvspace": 65536,
-                # "net.inet.udp.sendspace": 65536,
-            }
+            # "sysctls": {
+            #     "net.core.rmem_max": "8388608",
+            #     "net.core.wmem_max": "8388608",
+            #     "net.core.rmem_default": "65536",
+            #     "net.core.wmem_default": "65536"
+            # }
         }
         node_portlist[node_name] = {
             'host': ipv4_address,
@@ -68,7 +63,6 @@ def generate_docker_compose(num_nodes, client_nums, state_name, evaluator_config
             'build': '.',
             'container_name': client_name,
             'command': ["python", "-m", "evaluator.run_evaluator", "--name", client_name, "--evaluator", state_name, "--duration", str(evaluator_config['duration']), "--requests_per_second", str(evaluator_config['requests_per_second']), "--write_ratio", str(evaluator_config['write_ratio']), "--key_range", str(evaluator_config['key_range'])],
-            # 'command': ["python", "-m", "client.run_client", "--name", client_name, "--client", state_name],
             'ports': [f'{host_port}:8888/udp'],
             'networks': {
                 network_name: {
@@ -80,7 +74,13 @@ def generate_docker_compose(num_nodes, client_nums, state_name, evaluator_config
                     'condition': 'service_started'
                 }
             },
-            'volumes': [f'./dump:/app/dump']
+            'volumes': [f'./dump:/app/dump'],
+            # "sysctls": {
+            #     "net.core.rmem_max": "8388608",
+            #     "net.core.wmem_max": "8388608",
+            #     "net.core.rmem_default": "65536",
+            #     "net.core.wmem_default": "65536"
+            # }
         }
         node_portlist[client_name] = {
             'host': ipv4_address,

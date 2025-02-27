@@ -3,6 +3,7 @@ import asyncio
 import uuid
 import random
 import json
+import time
 from raft.serializers import MessagePackSerializer
 from raft.logger import logger  # Raftのロガーをインポート
 from raft.timer import Timer
@@ -295,6 +296,10 @@ class PerformanceEvaluator:
         await self.connect()
         # ランダムなキーを選択して書き込み, リーダーを選ぶ
         await self.write(f"key_{random.randint(1, self.key_range)}", 1)
+        await asyncio.sleep(0.5)
+
+        for i in range(1, self.key_range + 1):
+            await self.write(f"key_{i}", 1)
         logger.info("キーの初期化が完了しました")
         # カウンターをリセット
         self.reset_counters()
@@ -308,7 +313,7 @@ class PerformanceEvaluator:
         stats_timer.start()  # 統計タイマーを開始
 
         # リクエスト間隔を計算（秒）
-        interval = 1.0 / self.requests_per_second
+        interval = float(1.0) / float(self.requests_per_second)
 
         # 終了時間を設定
         end_time = self.start_time + self.duration
@@ -337,7 +342,7 @@ class PerformanceEvaluator:
                  # 次のリクエストまでの時間を計算（固定間隔ではなく、処理時間を考慮）
                 elapsed = asyncio.get_event_loop().time() - request_start
                 sleep_time = max(0, interval - elapsed)
-                await asyncio.sleep(0.55e-3 + sleep_time)
+                await asyncio.sleep(sleep_time)
 
             
             # 評価終了メッセージ
