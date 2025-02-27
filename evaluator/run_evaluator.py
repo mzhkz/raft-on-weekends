@@ -27,4 +27,5 @@ if __name__ == '__main__':
 
     evaluator = getEvaluatorClass(args.evaluator)(args.name, int(args.duration), int(args.requests_per_second), float(args.write_ratio), int(args.key_range), args.evaluator)
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(evaluator.run())
+    loop.create_task(evaluator.run())
+    loop.run_forever()

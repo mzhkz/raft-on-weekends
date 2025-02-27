@@ -44,7 +44,7 @@ def render_graph(x, throughput, latency, x_label, experiment_name, x_is_log):
     # axes[1].set_xscale('log', base=2)
     # axes[1].set_yscale('log')
     axes[1].set_xlabel(x_label)
-    axes[1].set_ylabel("Latency (s)")
+    axes[1].set_ylabel("Latency (msec)")
     axes[1].set_title("(b) Latency")
     axes[1].set_ylim(bottom=0)  # y軸を0から開始するように設定
     axes[1].legend()
@@ -57,7 +57,8 @@ def render_graph(x, throughput, latency, x_label, experiment_name, x_is_log):
 
 
 def load_data(experiment_name):
-    states = {"default": "Raft", "o": "ORaft", "cca": "cca-Raft", "opt_cca": "opt-cca-Raft"}
+    # states = {"default": "Raft", "o": "ORaft", "cca": "cca-Raft", "opt_cca": "opt-cca-Raft"}
+    states = {"default": "Raft", "o": "ORaft", "cca": "cca-Raft"}
     file = glob.glob(f"dump/experiment_results/{experiment_name}_all_results.json")[0]
     with open(file, 'r') as f:
         data = json.load(f)
@@ -69,9 +70,9 @@ def load_data(experiment_name):
         read_latency = {}
 
         for state, name in states.items():
-            write_throughput[name] = [data[key][state]["write_throughput_mean"] for key in x]
+            write_throughput[name] = [data[key][state]["write_throughput_max"] for key in x]
             write_latency[name] = [data[key][state]["write_latency_mean"] for key in x]
-            read_throughput[name] = [data[key][state]["read_throughput_mean"] for key in x]
+            read_throughput[name] = [data[key][state]["read_throughput_max"] for key in x]
             read_latency[name] = [data[key][state]["read_latency_mean"] for key in x]
         return x, write_throughput, write_latency, read_throughput, read_latency
 

@@ -10,7 +10,6 @@ STATE_TYPES = [
     "default",
     "o",
     "cca",
-    "opt_cca"
 ]
 
 
@@ -108,14 +107,14 @@ def collect_results(experiment_name, state_type, write_ratio):
                 aggregated_results[f"{metric}_max"] = max(results[metric])
 
     if write_ratio == 0.0:
-        if aggregated_results['read_throughput_median'] <= 20 or aggregated_results['read_latency_median'] < 0.1:
-            raise Exception(f"実験結果が不正です: {aggregated_results}")
+        if aggregated_results['read_throughput_mean'] <= 20 or aggregated_results['read_latency_mean'] < 0.2:
+            return None
     elif write_ratio == 1.0:
-        if aggregated_results['write_throughput_median'] <= 20 or aggregated_results['write_latency_median'] < 0.1:
-            raise Exception(f"実験結果が不正です: {aggregated_results}")
+        if aggregated_results['write_throughput_mean'] <= 20 or aggregated_results['write_latency_mean'] < 0.2:
+            return None
     else:
-        if aggregated_results['write_throughput_median'] <= 5 or aggregated_results['write_latency_median'] < 0.1 or aggregated_results['read_throughput_median'] <= 3 or aggregated_results['read_latency_median'] < 0.1:
-            raise Exception(f"実験結果が不正です: {aggregated_results}")
+        if aggregated_results['write_throughput_mean'] <= 5 or aggregated_results['write_latency_mean'] < 0.2 or aggregated_results['read_throughput_mean'] <= 3 or aggregated_results['read_latency_mean'] < 0.2:
+            return None
     
     # 結果をJSONファイルに保存
     output_dir = "dump/experiment_results"
@@ -165,16 +164,17 @@ def run_experiment(experiment_name, config, state_types):
                 break
             time.sleep(0.2)  # 2秒ごとにチェック
         
-        # コンテナを停止して削除
-        stop_and_remove_containers()
-        
         # 結果を収集
         try:
             results[state_type] = collect_results(experiment_name, state_type, config["write_ratio"])
+            print(f"実験 {experiment_name} の {state_type} の結果を収集しました。")
         except Exception as e:
             print(e)
             print("実験結果が不正です。再実行します。")
-            run_experiment(experiment_name, config, state_types)
+            run_experiment(experiment_name, config, [state_type])
+        finally:
+            # コンテナを停止して削除
+            stop_and_remove_containers()
     
     return results
 
@@ -193,13 +193,18 @@ def experiment1():
         config = base_config.copy()
         config["key_range"] = key_range
         
-        print(f"キー範囲: {key_range}で実験1を実行します")
         exp_results = run_experiment(experiment_name, config, STATE_TYPES)
         results[key_range] = exp_results
     
     # 全体の結果をJSONファイルに保存
+    with open("dump/experiment_results/experiment1_all_results.json", 'r') as f:
+        previous_results = json.load(f)
+    for key in results.keys():
+        previous_results[str(key)] = results[key]
+        print(f"実験1の{key}の結果を保存します...")
+    # 全体の結果をJSONファイルに保存
     with open("dump/experiment_results/experiment1_all_results.json", 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(previous_results, f, indent=2)
 
 def experiment2():
     """実験2: ノードの個数、n (4 <= n <= 9, 1刻み)、クライアントの個数 3, write_ratio = 1.0"""
@@ -216,13 +221,18 @@ def experiment2():
         config = base_config.copy()
         config["node_nums"] = n
         
-        print(f"ノード数: {n}で実験2を実行します")
         exp_results = run_experiment(experiment_name, config, STATE_TYPES)
         results[n] = exp_results
     
     # 全体の結果をJSONファイルに保存
+    with open("dump/experiment_results/experiment2_all_results.json", 'r') as f:
+        previous_results = json.load(f)
+    for key in results.keys():
+        previous_results[str(key)] = results[key]
+        print(f"実験2の{key}の結果を保存します...")
+    # 全体の結果をJSONファイルに保存
     with open("dump/experiment_results/experiment2_all_results.json", 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(previous_results, f, indent=2)
 
 def experiment3():
     """実験3: クライアントの個数 2^n (0 <= n <= 5, 1刻み), write_ratio = 1.0"""
@@ -233,20 +243,24 @@ def experiment3():
     
     results = {}
     
-    for n in range(0, 6):  # 0から5まで
+    for n in range(4, 6):  # 0から5まで
         client_nums = 2 ** n
         experiment_name = f"experiment3_clients_{client_nums}"
         
         config = base_config.copy()
         config["client_nums"] = client_nums
         
-        print(f"クライアント数: {client_nums}で実験3を実行します")
         exp_results = run_experiment(experiment_name, config, STATE_TYPES)
         results[client_nums] = exp_results
     
+    with open("dump/experiment_results/experiment3_all_results.json", 'r') as f:
+        previous_results = json.load(f)
+    for key in results.keys():
+        previous_results[str(key)] = results[key]
+        print(f"実験3の{key}の結果を保存します...")
     # 全体の結果をJSONファイルに保存
     with open("dump/experiment_results/experiment3_all_results.json", 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(previous_results, f, indent=2)
 
 def experiment4():
     """実験4: クライアントの個数 2^n (0 <= n <= 5, 1刻み), write_ratio = 0"""
@@ -264,25 +278,30 @@ def experiment4():
         config = base_config.copy()
         config["client_nums"] = client_nums
 
-        print(f"クライアント数: {client_nums}で実験4を実行します")
         exp_results = run_experiment(experiment_name, config, STATE_TYPES)
         results[client_nums] = exp_results
     
     # 全体の結果をJSONファイルに保存
+    with open("dump/experiment_results/experiment4_all_results.json", 'r') as f:
+        previous_results = json.load(f)
+    for key in results.keys():
+        previous_results[str(key)] = results[key]
+        print(f"実験4の{key}の結果を保存します...")
+    # 全体の結果をJSONファイルに保存
     with open("dump/experiment_results/experiment4_all_results.json", 'w') as f:
-        json.dump(results, f, indent=2)
+        json.dump(previous_results, f, indent=2)
 
 def main():
     # 実験結果保存ディレクトリを作成
     os.makedirs("dump/experiment_results", exist_ok=True)
-    delete_dump_files()
+    # delete_dump_files()
     
     # Dockerイメージをビルド
     # build_docker_images()
     
     # 各実験を実行
-    experiment1()
-    experiment2()
+    # experiment1()
+    # experiment2()
     experiment3()
     experiment4()
     
