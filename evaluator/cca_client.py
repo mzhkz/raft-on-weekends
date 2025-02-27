@@ -31,8 +31,7 @@ class CCAPerformanceEvaluator(PerformanceEvaluator):
             self.handle_write_share_response(response)
         elif response_type == 'ClientGetShareResponse':
             self.handle_get_share_response(response)
-
-
+            
     def handle_write_share_response(self, response):
         """シェアを受け取った時の処理"""
         request_id = response.get('request_id')
@@ -67,6 +66,13 @@ class CCAPerformanceEvaluator(PerformanceEvaluator):
                     # 読み込み成功数をインクリメント
                     self.successful_requests += 1
                     self.read_successful += 1
+
+                    if request_id in self.start_times:
+                        start_time = self.start_times[request_id]
+                        latency = asyncio.get_event_loop().time() - start_time
+                        self.total_latency += latency
+                        self.read_latency += latency
+                        del self.start_times[request_id]
         else:
             logger.error(f"シェアを受け取れなかった: {request_id} {response.get('error')}")
 

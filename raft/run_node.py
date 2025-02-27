@@ -34,5 +34,5 @@ if __name__ == '__main__':
         loop.stop()
         print(f"{duration}秒経過したため、プログラムを停止します")
     
-    loop.create_task(stop_after_5_seconds())
+    # loop.create_task(stop_after_5_seconds())
     loop.run_forever()

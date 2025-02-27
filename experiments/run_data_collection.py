@@ -140,7 +140,7 @@ def run_experiment(experiment_name, config, state_types):
             if len(result_files) >= client_nums:
                 print(f"結果ファイルが{client_nums}個生成されました。次に進みます。")
                 break
-            time.sleep(1)  # 2秒ごとにチェック
+            time.sleep(0.2)  # 2秒ごとにチェック
         
         # コンテナを停止して削除
         stop_and_remove_containers()

@@ -35,6 +35,35 @@ services:
     - 5560:8888/udp
     volumes:
     - ./dump:/app/dump
+  client2:
+    build: .
+    command:
+    - python
+    - -m
+    - evaluator.run_evaluator
+    - --name
+    - client2
+    - --evaluator
+    - cca
+    - --duration
+    - '4'
+    - --requests_per_second
+    - '130'
+    - --write_ratio
+    - '0'
+    - --key_range
+    - '50'
+    container_name: client2
+    depends_on:
+      node5:
+        condition: service_started
+    networks:
+      raft-common-network:
+        ipv4_address: 10.0.0.8
+    ports:
+    - 5561:8888/udp
+    volumes:
+    - ./dump:/app/dump
   node1:
     build: .
     command:
@@ -48,7 +77,7 @@ services:
     - --name
     - node1
     - --clients
-    - client1
+    - client1,client2
     - --state
     - cca
     - --duration
@@ -57,7 +86,7 @@ services:
     environment:
     - NODE=node1
     - CLUSTER=node2,node3,node4,node5
-    - CLIENTS=client1
+    - CLIENTS=client1,client2
     networks:
       raft-common-network:
         ipv4_address: 10.0.0.2
@@ -78,7 +107,7 @@ services:
     - --name
     - node2
     - --clients
-    - client1
+    - client1,client2
     - --state
     - cca
     - --duration
@@ -87,7 +116,7 @@ services:
     environment:
     - NODE=node2
     - CLUSTER=node1,node3,node4,node5
-    - CLIENTS=client1
+    - CLIENTS=client1,client2
     networks:
       raft-common-network:
         ipv4_address: 10.0.0.3
@@ -108,7 +137,7 @@ services:
     - --name
     - node3
     - --clients
-    - client1
+    - client1,client2
     - --state
     - cca
     - --duration
@@ -117,7 +146,7 @@ services:
     environment:
     - NODE=node3
     - CLUSTER=node1,node2,node4,node5
-    - CLIENTS=client1
+    - CLIENTS=client1,client2
     networks:
       raft-common-network:
         ipv4_address: 10.0.0.4
@@ -138,7 +167,7 @@ services:
     - --name
     - node4
     - --clients
-    - client1
+    - client1,client2
     - --state
     - cca
     - --duration
@@ -147,7 +176,7 @@ services:
     environment:
     - NODE=node4
     - CLUSTER=node1,node2,node3,node5
-    - CLIENTS=client1
+    - CLIENTS=client1,client2
     networks:
       raft-common-network:
         ipv4_address: 10.0.0.5
@@ -168,7 +197,7 @@ services:
     - --name
     - node5
     - --clients
-    - client1
+    - client1,client2
     - --state
     - cca
     - --duration
@@ -177,7 +206,7 @@ services:
     environment:
     - NODE=node5
     - CLUSTER=node1,node2,node3,node4
-    - CLIENTS=client1
+    - CLIENTS=client1,client2
     networks:
       raft-common-network:
         ipv4_address: 10.0.0.6
